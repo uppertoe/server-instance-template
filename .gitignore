@@ -1,0 +1,4 @@
+.env
+apps/**/.env
+ansible/hosts
+docker-compose.override.yml
