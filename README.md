@@ -1,5 +1,16 @@
 # server-[name]
 
+> **Before pushing either repo to GitHub:**
+> Update `.gitmodules` with the real URL of your `vps-scaffold` repo:
+> ```
+> [submodule "scaffold"]
+>     path = scaffold
+>     url = git@github.com:yourorg/vps-scaffold.git
+> ```
+> Then `git submodule sync && git add .gitmodules && git commit -m "chore: update scaffold remote"`
+>
+> Delete this block once done.
+
 > Replace this heading and delete this line once you've created your server repo.
 
 VPS implementation for `[name]`. Uses [vps-scaffold](https://github.com/yourorg/vps-scaffold)
