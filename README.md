@@ -93,6 +93,42 @@ docker compose up -d
 docker compose exec caddy caddy trust   # once per machine — adds CA to keychain
 ```
 
+## Database backups
+
+Databases are backed up to S3-compatible storage via Restic. Each database
+gets its own repository and encryption key.
+
+**Configure:**
+```bash
+cp backup/config.env.example backup/config.env && $EDITOR backup/config.env
+
+# One file per database:
+cp backup/services/example.env.example backup/services/myapp.env
+$EDITOR backup/services/myapp.env
+```
+
+**Deploy:**
+```bash
+ansible-playbook -i ansible/hosts ansible/backup.yml
+```
+
+**Adding a database** = copy `backup/services/example.env.example` to
+`backup/services/newservice.env`, fill it in, re-run the playbook.
+
+**Restore:**
+```bash
+# On the server:
+/opt/backup/restore.sh --service myapp --list
+/opt/backup/restore.sh --service myapp --target myapp_test   # safe test restore
+/opt/backup/restore.sh --service myapp                       # production restore (prompts)
+```
+
+**Trigger a backup now:**
+```bash
+ssh myserver sudo systemctl start backup.service
+ssh myserver journalctl -u backup.service -f
+```
+
 ## Security auditing
 
 Run against a real provisioned VPS (not locally):
