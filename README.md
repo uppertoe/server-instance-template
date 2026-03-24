@@ -41,10 +41,13 @@ cp .env.example .env && $EDITOR .env
 # 2. Install Ansible dependencies (once per machine)
 ansible-galaxy collection install -r scaffold/ansible/requirements.yml
 
-# 3. Bootstrap — run as root on first provision only
-ansible-playbook -i ansible/hosts scaffold/ansible/bootstrap.yml
+# 3. Bootstrap — run once as root on a fresh VPS
+#    Most providers give you a root password — add --ask-pass and Ansible
+#    will prompt for it. If your provider gave you an SSH key already, omit it.
+ansible-playbook -i ansible/hosts scaffold/ansible/bootstrap.yml --ask-pass
 
 # 4. Harden and install Docker — idempotent, safe to re-run any time
+#    From here on Ansible uses the deploy user with your SSH key (no password needed).
 ansible-playbook -i ansible/hosts scaffold/ansible/site.yml
 ```
 
