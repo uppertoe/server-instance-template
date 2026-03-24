@@ -5,41 +5,72 @@
 VPS implementation for `[name]`. Uses [vps-base-template](https://github.com/uppertoe/vps-base-template)
 for infrastructure — Ansible provisioning, hardening, Docker setup, and Caddy base config.
 
-## First-time setup
+---
+
+## Create a new server repo from this template
+
+Do this once per server.
+
+1. On GitHub, open [server-instance-template](https://github.com/uppertoe/server-instance-template)
+   and click **Use this template → Create a new repository**.
+2. Name it `server-[name]` (e.g. `server-mycompany`). Keep it **private**.
+3. Clone it locally — the `scaffold` submodule is included automatically:
+   ```bash
+   git clone --recurse-submodules git@github.com:yourorg/server-[name].git
+   cd server-[name]
+   ```
+4. Edit the repo name in this README, then commit:
+   ```bash
+   git add README.md && git commit -m "chore: name server repo"
+   git push
+   ```
+
+That's it — your server repo is ready. Continue below to provision the server.
+
+---
+
+## Provision a new server
+
+Run these once on a fresh VPS (Ubuntu 24.04 or Debian 12).
 
 ```bash
-# 1. Clone (submodules included)
-git clone --recurse-submodules git@github.com:yourorg/server-[name].git
-cd server-[name]
-
-# 2. Configure
-cp .env.example .env && $EDITOR .env
+# 1. Configure inventory and environment
 cp ansible/hosts.example ansible/hosts && $EDITOR ansible/hosts
+cp .env.example .env && $EDITOR .env
 
-# 3. Install Ansible dependencies (once per machine)
+# 2. Install Ansible dependencies (once per machine)
 ansible-galaxy collection install -r scaffold/ansible/requirements.yml
 
-# 4. Provision the server — run once as root on a fresh VPS
+# 3. Bootstrap — run as root on first provision only
 ansible-playbook -i ansible/hosts scaffold/ansible/bootstrap.yml
 
-# 5. Harden and install Docker — idempotent, safe to re-run
+# 4. Harden and install Docker — idempotent, safe to re-run any time
 ansible-playbook -i ansible/hosts scaffold/ansible/site.yml
 ```
 
-## Deploying
+---
+
+## Deploy apps to the server
 
 ```bash
-ssh myserver
+# On the server (as the deploy user):
+git clone --recurse-submodules git@github.com:yourorg/server-[name].git /opt/deploy
 cd /opt/deploy
-git clone --recurse-submodules git@github.com:yourorg/server-[name].git .
 cp .env.example .env && $EDITOR .env
-# create .env for each app too
+# Create .env for each app too (see apps/*/env.example)
 docker compose up -d
 ```
 
-## Adding an app
+To redeploy after changes:
+```bash
+git pull --recurse-submodules && docker compose up -d
+```
 
-Create a folder in `apps/` with three files:
+---
+
+## Add an app
+
+Create a folder under `apps/` with three files:
 
 **`apps/myapp/docker-compose.yml`**
 ```yaml
@@ -66,7 +97,7 @@ myapp.{$DOMAIN} {
 }
 ```
 
-Then add one line to `docker-compose.yml`:
+Then add one line to the root `docker-compose.yml`:
 ```yaml
 include:
   - apps/myapp/docker-compose.yml
@@ -74,13 +105,7 @@ include:
 
 Caddy picks up `myapp.caddy` automatically — no changes to `Caddyfile` needed.
 
-## Local development
-
-```bash
-cp docker-compose.override.yml.example docker-compose.override.yml
-docker compose up -d
-docker compose exec caddy caddy trust   # once per machine — adds CA to keychain
-```
+---
 
 ## Database backups
 
@@ -118,6 +143,18 @@ ssh myserver sudo systemctl start backup.service
 ssh myserver journalctl -u backup.service -f
 ```
 
+---
+
+## Local development
+
+```bash
+cp docker-compose.override.yml.example docker-compose.override.yml
+docker compose up -d
+docker compose exec caddy caddy trust   # once per machine — adds CA to keychain
+```
+
+---
+
 ## Security auditing
 
 Run against a real provisioned VPS (not locally):
@@ -130,12 +167,15 @@ ansible-playbook -i ansible/hosts scaffold/ansible/audit-docker.yml
 
 Reports saved to `reports/` (gitignored).
 
-## Updating the scaffold
+---
+
+## Update the scaffold
 
 ```bash
 cd scaffold && git pull origin main && cd ..
 git add scaffold
 git commit -m "chore: update scaffold"
+git push
 ```
 
-On server: `git pull --recurse-submodules && docker compose up -d`
+On the server: `git pull --recurse-submodules && docker compose up -d`
