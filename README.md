@@ -35,7 +35,8 @@ Run these **from your local machine** — Ansible SSHs into the VPS on your beha
 
 ```bash
 # 1. Add the server to your local SSH config (~/.ssh/config)
-#    The name here ("myserver") should match the hostname in ansible/hosts.
+#    Replace "myserver" with your own alias.
+#    Use that same alias in ~/.ssh/config, ansible/hosts, and the smoke test.
 cat >> ~/.ssh/config <<'EOF'
 
 Host myserver
@@ -46,6 +47,7 @@ Host myserver
 EOF
 
 # 2. Configure inventory and environment
+#    Replace "myserver" in ansible/hosts too.
 #    Keep ansible_ssh_private_key_file aligned with the same key.
 #    Bootstrap will install the matching .pub onto the server.
 cp ansible/hosts.example ansible/hosts && $EDITOR ansible/hosts
@@ -69,6 +71,10 @@ bash scripts/post-provision-smoke-test.sh myserver
 
 This smoke test checks SSH access, sudo, Docker, systemd services, SSH hardening,
 UFW rules, and deploy-user setup against the real VPS.
+
+`myserver` is only an example alias. Rename it to whatever you want, but keep it
+consistent across `~/.ssh/config`, `ansible/hosts`, and any `ssh` or smoke-test
+commands you run.
 
 ---
 
