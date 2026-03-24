@@ -81,8 +81,7 @@ docker compose up -d
 
 To redeploy after changes:
 ```bash
-# On the server:
-cd /opt/deploy && git pull --recurse-submodules && docker compose up -d
+ssh myserver ./deploy
 ```
 
 ---
@@ -197,4 +196,4 @@ git commit -m "chore: update scaffold"
 git push
 ```
 
-On the server: `git pull --recurse-submodules && docker compose up -d`
+On the server: `./deploy`
