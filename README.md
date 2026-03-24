@@ -41,10 +41,13 @@ cat >> ~/.ssh/config <<'EOF'
 Host myserver
     HostName YOUR_SERVER_IP
     User deploy
+    # Use whichever SSH key you want bootstrap to install for deploy.
     IdentityFile ~/.ssh/id_ed25519
 EOF
 
 # 2. Configure inventory and environment
+#    Keep ansible_ssh_private_key_file aligned with the same key.
+#    Bootstrap will install the matching .pub onto the server.
 cp ansible/hosts.example ansible/hosts && $EDITOR ansible/hosts
 cp .env.example .env && $EDITOR .env
 
@@ -60,9 +63,12 @@ ansible-playbook -i ansible/hosts scaffold/ansible/bootstrap.yml --ask-pass
 #    From here on Ansible uses the deploy user with your SSH key (no password needed).
 ansible-playbook -i ansible/hosts scaffold/ansible/site.yml
 
-# 6. Verify
-ssh myserver
+# 6. Smoke test the fresh VPS
+bash scripts/post-provision-smoke-test.sh myserver
 ```
+
+This smoke test checks SSH access, sudo, Docker, systemd services, SSH hardening,
+UFW rules, and deploy-user setup against the real VPS.
 
 ---
 
@@ -128,23 +134,27 @@ Caddy picks up `myapp.caddy` automatically — no changes to `Caddyfile` needed.
 ## Database backups
 
 Databases are backed up to S3-compatible storage via Restic. Each database
-gets its own repository and encryption key.
+gets its own repository and encryption key. Backups run hourly by default, and
+repository verification runs weekly by default.
 
 **Configure:**
 ```bash
 cp backup/config.env.example backup/config.env && $EDITOR backup/config.env
 
 # One file per database:
-cp backup/services/example.env.example backup/services/myapp.env
+cp backup/services/service.env.example backup/services/myapp.env
 $EDITOR backup/services/myapp.env
 ```
 
 **Deploy:**
 ```bash
 ansible-playbook -i ansible/hosts ansible/backup.yml
+
+# Then rerun the smoke test in strict backup mode:
+bash scripts/post-provision-smoke-test.sh myserver --require-backup
 ```
 
-**Adding a database** = copy `backup/services/example.env.example` to
+**Adding a database** = copy `backup/services/service.env.example` to
 `backup/services/newservice.env`, fill it in, re-run the playbook.
 
 **Restore:**
@@ -159,6 +169,18 @@ ansible-playbook -i ansible/hosts ansible/backup.yml
 ```bash
 ssh myserver sudo systemctl start backup.service
 ssh myserver journalctl -u backup.service -f
+
+# Manual repository verification:
+ssh myserver sudo systemctl start backup-verify.service
+ssh myserver journalctl -u backup-verify.service -f
+```
+
+**Local backup tests before deploying to a real VPS:**
+```bash
+cd scaffold
+molecule test -s backup
+bash backup/tests/integration/run_tests.sh
+cd ..
 ```
 
 ---

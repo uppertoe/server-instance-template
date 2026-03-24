@@ -3,7 +3,7 @@
 #
 # Prerequisites:
 #   backup/config.env         — copy from backup/config.env.example and fill in
-#   backup/services/*.env     — one file per database (copy from services/example.env.example)
+#   backup/services/*.env     — one file per database (copy from services/service.env.example)
 #
 # Usage:
 #   ansible-playbook -i ansible/hosts scaffold/ansible/backup.yml
