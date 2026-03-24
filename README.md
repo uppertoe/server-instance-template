@@ -34,21 +34,34 @@ That's it — your server repo is ready. Continue below to provision the server.
 Run these **from your local machine** — Ansible SSHs into the VPS on your behalf.
 
 ```bash
-# 1. Configure inventory and environment
+# 1. Add the server to your local SSH config (~/.ssh/config)
+#    The name here ("myserver") should match the hostname in ansible/hosts.
+cat >> ~/.ssh/config <<'EOF'
+
+Host myserver
+    HostName YOUR_SERVER_IP
+    User deploy
+    IdentityFile ~/.ssh/id_ed25519
+EOF
+
+# 2. Configure inventory and environment
 cp ansible/hosts.example ansible/hosts && $EDITOR ansible/hosts
 cp .env.example .env && $EDITOR .env
 
-# 2. Install Ansible dependencies (once per machine)
+# 3. Install Ansible dependencies (once per machine)
 ansible-galaxy collection install -r scaffold/ansible/requirements.yml
 
-# 3. Bootstrap — run once as root on a fresh VPS
-#    Most providers give you a root password — add --ask-pass and Ansible
-#    will prompt for it. If your provider gave you an SSH key already, omit it.
+# 4. Bootstrap — run once as root on a fresh VPS
+#    Most providers give you a root password — --ask-pass makes Ansible prompt for it.
+#    If your provider gave you a root SSH key instead, omit --ask-pass.
 ansible-playbook -i ansible/hosts scaffold/ansible/bootstrap.yml --ask-pass
 
-# 4. Harden and install Docker — idempotent, safe to re-run any time
+# 5. Harden and install Docker — idempotent, safe to re-run any time
 #    From here on Ansible uses the deploy user with your SSH key (no password needed).
 ansible-playbook -i ansible/hosts scaffold/ansible/site.yml
+
+# 6. Verify
+ssh myserver
 ```
 
 ---
