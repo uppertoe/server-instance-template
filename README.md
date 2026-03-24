@@ -31,7 +31,7 @@ That's it — your server repo is ready. Continue below to provision the server.
 
 ## Provision a new server
 
-Run these once on a fresh VPS (Ubuntu 24.04 or Debian 12).
+Run these **from your local machine** — Ansible SSHs into the VPS on your behalf.
 
 ```bash
 # 1. Configure inventory and environment
@@ -52,8 +52,10 @@ ansible-playbook -i ansible/hosts scaffold/ansible/site.yml
 
 ## Deploy apps to the server
 
+Once provisioned, clone the repo **on the server** so Docker Compose can read it:
+
 ```bash
-# On the server (as the deploy user):
+# SSH into the server first, then:
 git clone --recurse-submodules git@github.com:yourorg/server-[name].git /opt/deploy
 cd /opt/deploy
 cp .env.example .env && $EDITOR .env
@@ -63,7 +65,8 @@ docker compose up -d
 
 To redeploy after changes:
 ```bash
-git pull --recurse-submodules && docker compose up -d
+# On the server:
+cd /opt/deploy && git pull --recurse-submodules && docker compose up -d
 ```
 
 ---
