@@ -218,10 +218,17 @@ Reports saved to `reports/` (gitignored).
 ## Update the scaffold
 
 ```bash
-cd scaffold && git pull origin main && cd ..
+# Existing server repos do not automatically pick up new scaffold commits.
+# Update the submodule, then commit the new scaffold pointer in your repo.
+git submodule update --remote --merge scaffold
 git add scaffold
 git commit -m "chore: update scaffold"
 git push
 ```
 
-On the server: `./deploy`
+If a template fix touched top-level files such as `Caddyfile`, `Caddyfile.local`,
+or `ansible/hosts.example`, copy those changes into your existing server repo
+manually too. Top-level files are copied when the repo is created; only
+`scaffold/` stays linked as a submodule.
+
+On the server: `~/deploy`
