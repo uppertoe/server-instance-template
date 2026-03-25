@@ -99,6 +99,14 @@ cp .env.example .env && $EDITOR .env
 docker compose up -d
 ```
 
+For runtime secrets, edit the files on the server in `/opt/deploy`:
+- `.env`
+- `apps/*/.env`
+
+Docker Compose reads those files directly from the server checkout, so local
+copies on your laptop do not affect the running apps until you update the repo
+on the VPS.
+
 To redeploy after changes:
 ```bash
 ssh myserver ./deploy
@@ -167,6 +175,10 @@ cp backup/config.env.example backup/config.env && $EDITOR backup/config.env
 cp backup/services/service.env.example backup/services/myapp.env
 $EDITOR backup/services/myapp.env
 ```
+
+Unlike the app/runtime `.env` files above, these backup env files are edited
+locally in your server repo on your laptop. The backup playbook uploads them to
+the server and installs them into `/etc/restic/`.
 
 **Deploy:**
 ```bash
