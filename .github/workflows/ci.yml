@@ -7,9 +7,20 @@ on:
   pull_request:
 
 jobs:
+  template-consistency:
+    name: Template Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run template consistency checks
+        run: bash scripts/check-template-consistency.sh
+
   compose-smoke:
     name: Compose Smoke
     runs-on: ubuntu-latest
+    needs: template-consistency
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
