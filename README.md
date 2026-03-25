@@ -63,14 +63,20 @@ ansible-playbook -i ansible/hosts scaffold/ansible/bootstrap.yml --ask-pass
 
 # 5. Harden and install Docker — idempotent, safe to re-run any time
 #    From here on Ansible uses the deploy user with your SSH key (no password needed).
+#    This step also locks the local root password and removes auditd by default.
 ansible-playbook -i ansible/hosts scaffold/ansible/site.yml
 
-# 6. Smoke test the fresh VPS
+# 6. Reboot once so the latest kernel and package updates are active
+ssh myserver sudo reboot
+
+# Wait a minute or two for SSH to return, then rerun the smoke test.
+
+# 7. Smoke test the fresh VPS
 bash scripts/post-provision-smoke-test.sh myserver
 ```
 
 This smoke test checks SSH access, sudo, Docker, systemd services, SSH hardening,
-UFW rules, and deploy-user setup against the real VPS.
+UFW rules, root-account lock state, and deploy-user setup against the real VPS.
 
 `myserver` is only an example alias. Rename it to whatever you want, but keep it
 consistent across `~/.ssh/config`, `ansible/hosts`, and any `ssh` or smoke-test
