@@ -27,6 +27,27 @@ wait_for_caddy() {
   done
 }
 
+wait_for_caddy_healthy() {
+  local attempts=0
+  local container_id=""
+
+  container_id="$("${BASE_COMPOSE[@]}" ps -q caddy)"
+  if [[ -z "$container_id" ]]; then
+    echo "caddy container id not found" >&2
+    return 1
+  fi
+
+  until [[ "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_id")" == "healthy" ]]; do
+    attempts=$((attempts + 1))
+    if [[ "$attempts" -ge 30 ]]; then
+      "${BASE_COMPOSE[@]}" logs caddy || true
+      echo "caddy container failed to reach healthy state" >&2
+      return 1
+    fi
+    sleep 1
+  done
+}
+
 assert_http_redirect() {
   local expected_host="$1"
   local attempts=0
@@ -110,6 +131,7 @@ echo "Validating standard compose config"
 echo "Starting caddy with production config"
 "${BASE_COMPOSE[@]}" up -d caddy >/dev/null
 wait_for_caddy
+wait_for_caddy_healthy
 "${BASE_COMPOSE[@]}" exec -T caddy grep -F 'ci.{$DOMAIN}' /tmp/Caddyfile >/dev/null
 assert_http_redirect "ci.example.com"
 
@@ -120,5 +142,6 @@ docker compose -f docker-compose.yml -f "$CI_OVERRIDE_FILE" -f docker-compose.ov
 echo "Restarting caddy with local override"
 docker compose -f docker-compose.yml -f "$CI_OVERRIDE_FILE" -f docker-compose.override.yml up -d caddy >/dev/null
 wait_for_caddy
+wait_for_caddy_healthy
 "${BASE_COMPOSE[@]}" exec -T caddy grep -F 'local_certs' /tmp/Caddyfile >/dev/null
 assert_https_body "ci.example.com"
