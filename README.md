@@ -102,6 +102,14 @@ To redeploy after changes:
 ssh myserver ./deploy
 ```
 
+The deploy helper also normalizes secret-file permissions on each run:
+- `.env`
+- `apps/*/.env`
+- `backup/config.env`
+- `backup/services/*.env`
+
+Those files are set to mode `600` before Compose restarts containers.
+
 ---
 
 ## Add an app
