@@ -1,5 +1,7 @@
 # server-[name]
 
+[![CI](https://github.com/uppertoe/server-instance-template/actions/workflows/ci.yml/badge.svg)](https://github.com/uppertoe/server-instance-template/actions/workflows/ci.yml)
+
 > Replace this heading with your server name and delete this line.
 
 VPS implementation for `[name]`. Uses [vps-base-template](https://github.com/uppertoe/vps-base-template)
