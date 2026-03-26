@@ -132,6 +132,7 @@ echo "Starting caddy with production config"
 "${BASE_COMPOSE[@]}" up -d caddy >/dev/null
 wait_for_caddy
 wait_for_caddy_healthy
+"${BASE_COMPOSE[@]}" exec -T caddy grep -F 'encode zstd gzip' /tmp/Caddyfile >/dev/null
 "${BASE_COMPOSE[@]}" exec -T caddy grep -F 'ci.{$DOMAIN}' /tmp/Caddyfile >/dev/null
 assert_http_redirect "ci.example.com"
 
@@ -143,5 +144,6 @@ echo "Restarting caddy with local override"
 docker compose -f docker-compose.yml -f "$CI_OVERRIDE_FILE" -f docker-compose.override.yml up -d caddy >/dev/null
 wait_for_caddy
 wait_for_caddy_healthy
+"${BASE_COMPOSE[@]}" exec -T caddy grep -F 'encode zstd gzip' /tmp/Caddyfile >/dev/null
 "${BASE_COMPOSE[@]}" exec -T caddy grep -F 'local_certs' /tmp/Caddyfile >/dev/null
 assert_https_body "ci.example.com"
