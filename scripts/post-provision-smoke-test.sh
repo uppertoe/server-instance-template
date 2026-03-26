@@ -167,16 +167,16 @@ if ! "$SKIP_BACKUP"; then
 
   if remote "[[ -f /opt/backup/backup.sh || -f /etc/systemd/system/backup.service || -d /etc/restic ]]" >/dev/null 2>/dev/null; then
     pass "Backup system is deployed"
-    check_remote "backup.sh is installed" "[[ -x /opt/backup/backup.sh ]]"
-    check_remote "restore.sh is installed" "[[ -x /opt/backup/restore.sh ]]"
+    check_remote "backup.sh is installed" "sudo test -x /opt/backup/backup.sh"
+    check_remote "restore.sh is installed" "sudo test -x /opt/backup/restore.sh"
     check_remote "restic is installed" "restic version >/dev/null"
-    check_remote "/etc/restic/config.env is present and locked down" "[[ -f /etc/restic/config.env ]] && [[ \$(sudo stat -c '%U:%G:%a' /etc/restic/config.env) == 'root:root:600' ]]"
+    check_remote "/etc/restic/config.env is present and locked down" "sudo test -f /etc/restic/config.env && [[ \$(sudo stat -c '%U:%G:%a' /etc/restic/config.env) == 'root:root:600' ]]"
     check_remote "backup.timer is active" "sudo systemctl is-active --quiet backup.timer"
     check_remote "backup.timer is enabled" "sudo systemctl is-enabled --quiet backup.timer"
     check_remote "backup-verify.timer is active" "sudo systemctl is-active --quiet backup-verify.timer"
     check_remote "backup-verify.timer is enabled" "sudo systemctl is-enabled --quiet backup-verify.timer"
 
-    service_count="$(remote "find /etc/restic/services -maxdepth 1 -type f -name '*.env' | wc -l | tr -d ' '" 2>/dev/null || echo 0)"
+    service_count="$(remote "sudo find /etc/restic/services -maxdepth 1 -type f -name '*.env' | wc -l | tr -d ' '" 2>/dev/null || echo 0)"
     if [[ "$service_count" =~ ^[0-9]+$ ]] && (( service_count > 0 )); then
       pass "Backup service configs exist ($service_count)"
       check_remote "backup.sh dry-run succeeds" "sudo /opt/backup/backup.sh --dry-run >/dev/null"
