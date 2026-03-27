@@ -176,6 +176,20 @@ cp backup/services/service.env.example backup/services/myapp.env
 $EDITOR backup/services/myapp.env
 ```
 
+If you use AWS for backup storage, you can provision the bucket + IAM user
+locally on your laptop first:
+```bash
+pip install boto3
+python3 scripts/aws-backup-setup.py \
+  --profile my-aws-admin \
+  --bucket myserver-backups \
+  --iam-user myserver-backup
+```
+
+That helper is idempotent. It prints the AWS values to copy into
+`backup/config.env`, and can optionally update that file locally with
+`--write-config`.
+
 Unlike the app/runtime `.env` files above, these backup env files are edited
 locally in your server repo on your laptop. The backup playbook uploads them to
 the server and installs them into `/etc/restic/`.
