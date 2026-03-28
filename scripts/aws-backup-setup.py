@@ -210,6 +210,11 @@ def print_config_snippet(bucket: str, region: str, creds) -> None:
     section("Repository examples for backup/services/*.env")
     print(f"  RESTIC_REPOSITORY=s3:s3.amazonaws.com/{bucket}/myapp-backup")
     print(f"  RESTIC_REPOSITORY=s3:s3.amazonaws.com/{bucket}/planka-backup")
+    print("  CONTAINER_NAME=<exact container name or compose service/container stem>")
+
+    section("Important note")
+    print("  KEEP_DAILY / KEEP_WEEKLY / KEEP_MONTHLY control snapshot retention only.")
+    print("  The backup run schedule is configured separately in Ansible via backup_schedule (default: hourly).")
 
 
 def parse_args(argv=None):

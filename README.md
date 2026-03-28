@@ -197,6 +197,12 @@ That helper is idempotent. It prints the AWS values to copy into
 `backup/config.env`, and can optionally update that file locally with
 `--write-config`.
 
+`backup/config.env` controls shared credentials and snapshot retention only.
+The `KEEP_DAILY`, `KEEP_WEEKLY`, and `KEEP_MONTHLY` values tell Restic how many
+snapshots to retain after each run; they do not change the schedule. The
+backup job schedule is controlled by the Ansible variable `backup_schedule`,
+which defaults to `hourly`.
+
 Unlike the app/runtime `.env` files above, these backup env files are edited
 locally in your server repo on your laptop. The backup playbook uploads them to
 the server and installs them into `/etc/restic/`.
@@ -211,6 +217,10 @@ bash scripts/post-provision-smoke-test.sh myserver --require-backup
 
 **Adding a database** = copy `backup/services/service.env.example` to
 `backup/services/newservice.env`, fill it in, re-run the playbook.
+
+For `CONTAINER_NAME`, you can use either the exact running container name or
+the Compose service/container stem if it is unique. For example, `jw_postgres`
+will resolve to a container such as `deploy-jw_postgres-1`.
 
 **Restore:**
 ```bash
