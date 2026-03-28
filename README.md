@@ -197,6 +197,10 @@ That helper is idempotent. It prints the AWS values to copy into
 `backup/config.env`, and can optionally update that file locally with
 `--write-config`.
 
+It also scopes the backup IAM user to the bucket's `backups/` prefix, so
+service repositories should use paths like
+`s3:s3.amazonaws.com/<bucket>/backups/<service>`.
+
 `backup/config.env` controls shared credentials and snapshot retention only.
 The `KEEP_DAILY`, `KEEP_WEEKLY`, and `KEEP_MONTHLY` values tell Restic how many
 snapshots to retain after each run; they do not change the schedule. The

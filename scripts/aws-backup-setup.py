@@ -52,13 +52,14 @@ def backup_policy(bucket: str) -> dict:
                 "Sid": "BackupBucketObjects",
                 "Effect": "Allow",
                 "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
-                "Resource": f"arn:aws:s3:::{bucket}/*",
+                "Resource": f"arn:aws:s3:::{bucket}/backups/*",
             },
             {
                 "Sid": "BackupBucketList",
                 "Effect": "Allow",
                 "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
                 "Resource": f"arn:aws:s3:::{bucket}",
+                "Condition": {"StringLike": {"s3:prefix": "backups/*"}},
             },
         ],
     }
@@ -208,11 +209,12 @@ def print_config_snippet(bucket: str, region: str, creds) -> None:
     print(f"  AWS_DEFAULT_REGION={region}")
 
     section("Repository examples for backup/services/*.env")
-    print(f"  RESTIC_REPOSITORY=s3:s3.amazonaws.com/{bucket}/myapp-backup")
-    print(f"  RESTIC_REPOSITORY=s3:s3.amazonaws.com/{bucket}/planka-backup")
+    print(f"  RESTIC_REPOSITORY=s3:s3.amazonaws.com/{bucket}/backups/myapp-backup")
+    print(f"  RESTIC_REPOSITORY=s3:s3.amazonaws.com/{bucket}/backups/planka-backup")
     print("  CONTAINER_NAME=<exact container name or compose service/container stem>")
 
     section("Important note")
+    print("  This helper scopes backup IAM access to the bucket's backups/ prefix only.")
     print("  KEEP_DAILY / KEEP_WEEKLY / KEEP_MONTHLY control snapshot retention only.")
     print("  The backup run schedule is configured separately in Ansible via backup_schedule (default: hourly).")
 
