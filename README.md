@@ -66,7 +66,14 @@ ansible-playbook -i ansible/hosts scaffold/ansible/bootstrap.yml --ask-pass
 # 5. Harden and install Docker — idempotent, safe to re-run any time
 #    From here on Ansible uses the deploy user with your SSH key (no password needed).
 #    This step also locks the local root password and removes auditd by default.
+#    It uses the faster day-to-day path by default: safe apt upgrades and AIDE
+#    DB initialization are skipped unless you opt in.
 ansible-playbook -i ansible/hosts scaffold/ansible/site.yml
+
+# Optional fuller maintenance run:
+ansible-playbook -i ansible/hosts scaffold/ansible/site.yml \
+  -e common_run_safe_upgrade=true \
+  -e baseline_initialize_aide_database=true
 
 # 6. Reboot once so the latest kernel and package updates are active
 ssh myserver sudo reboot

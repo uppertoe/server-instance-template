@@ -14,5 +14,17 @@ ansible_user=deploy
 # Bootstrap copies the matching .pub for this key onto the server.
 ansible_ssh_private_key_file=~/.ssh/id_ed25519
 ansible_python_interpreter=/usr/bin/python3
+# Managed swapfile and lightweight host monitoring are enabled by default.
+# Override per host or per group if needed, for example:
+# host_swapfile_enabled=true
+# host_swapfile_size_mb=4096
+# host_monitoring_enabled=true
+# host_earlyoom_enabled=true
+# host_earlyoom_min_free_mem_percent=5
+# host_earlyoom_min_free_swap_percent=10
+# Faster default site runs skip safe apt upgrades and AIDE DB initialization.
+# Turn them on explicitly when needed:
+# common_run_safe_upgrade=true
+# baseline_initialize_aide_database=true
 # Enable for Redis or similar workloads that require vm.overcommit_memory=1.
 # host_vm_overcommit_memory_enabled=true
