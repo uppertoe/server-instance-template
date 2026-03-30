@@ -22,6 +22,17 @@ ansible_python_interpreter=/usr/bin/python3
 # host_earlyoom_enabled=true
 # host_earlyoom_min_free_mem_percent=5
 # host_earlyoom_min_free_swap_percent=10
+# Logging retention defaults are also managed for small VPSes.
+# Override per host if needed, for example:
+# baseline_journald_system_max_use=300M
+# baseline_journald_system_keep_free=500M
+# baseline_journald_max_file_sec=1month
+# baseline_auditd_max_log_file_mb=25
+# baseline_auditd_num_logs=8
+# baseline_auditd_max_log_file_action=ROTATE
+# Backups run hourly by default; set verify to an explicit off-hour time so
+# weekly prune/check work is less likely to overlap with a normal backup.
+# backup_verify_schedule=Sun *-*-* 03:17:00
 # Faster default site runs skip safe apt upgrades and AIDE DB initialization.
 # Turn them on explicitly when needed:
 # common_run_safe_upgrade=true
