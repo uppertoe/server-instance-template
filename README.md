@@ -63,26 +63,26 @@ ansible-galaxy collection install -r scaffold/ansible/requirements.yml
 #    If your provider gave you a root SSH key instead, omit --ask-pass.
 ansible-playbook -i ansible/hosts scaffold/ansible/bootstrap.yml --ask-pass
 
-# 5. Harden and install Docker — idempotent, safe to re-run any time
+# 5. First-run hardening and Docker install
 #    From here on Ansible uses the deploy user with your SSH key (no password needed).
-#    This step also locks the local root password and removes auditd by default.
-#    It uses the faster day-to-day path by default: safe apt upgrades and AIDE
-#    DB initialization are skipped unless you opt in.
-ansible-playbook -i ansible/hosts scaffold/ansible/site.yml
+#    This heavier pass enables the slower maintenance/compliance steps too.
+ansible-playbook -i ansible/hosts scaffold/ansible/site-first-run.yml
 
-# Optional fuller maintenance run:
-ansible-playbook -i ansible/hosts scaffold/ansible/site.yml \
-  -e common_run_safe_upgrade=true \
-  -e baseline_initialize_aide_database=true
+# 6. Quick day-to-day re-apply path for later changes
+ansible-playbook -i ansible/hosts scaffold/ansible/site-quick.yml
 
-# 6. Reboot once so the latest kernel and package updates are active
+# 7. Reboot once so the latest kernel and package updates are active
 ssh myserver sudo reboot
 
 # Wait a minute or two for SSH to return, then rerun the smoke test.
 
-# 7. Smoke test the fresh VPS
+# 8. Smoke test the fresh VPS
 bash scripts/post-provision-smoke-test.sh myserver
 ```
+
+Mode summary:
+- `scaffold/ansible/site-first-run.yml`: heavier first-run/compliance pass
+- `scaffold/ansible/site-quick.yml`: fast day-to-day apply path
 
 This smoke test checks SSH access, sudo, Docker, systemd services, SSH hardening,
 UFW rules, root-account lock state, and deploy-user setup against the real VPS.
@@ -320,6 +320,15 @@ ansible-playbook -i ansible/hosts scaffold/ansible/audit-docker.yml
 ```
 
 Reports saved to `reports/` (gitignored).
+
+Feedback loop:
+1. Run `scaffold/ansible/site-first-run.yml` to establish the strongest baseline the scaffold supports by default.
+2. Run `scaffold/ansible/audit-openscap.yml` and `scaffold/ansible/audit-docker.yml`.
+3. Review the reports and separate findings into:
+   expected platform exceptions, host-hardening gaps, and per-container app gaps.
+4. Fix host gaps in inventory vars or scaffold roles, and fix container gaps in `apps/*/docker-compose.yml`.
+5. Re-run `scaffold/ansible/site-quick.yml`.
+6. Re-run the audits until the remaining findings are either resolved or formally accepted.
 
 ---
 

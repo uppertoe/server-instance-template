@@ -4,7 +4,8 @@
 #
 # Usage:
 #   ansible-playbook -i ansible/hosts scaffold/ansible/bootstrap.yml
-#   ansible-playbook -i ansible/hosts scaffold/ansible/site.yml
+#   ansible-playbook -i ansible/hosts scaffold/ansible/site-first-run.yml
+#   ansible-playbook -i ansible/hosts scaffold/ansible/site-quick.yml
 
 [servers]
 myserver ansible_host=YOUR_SERVER_IP
