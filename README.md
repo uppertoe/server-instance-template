@@ -140,7 +140,18 @@ steps into the shared `~/deploy` helper.
 
 ## Add an app
 
-Create a folder under `apps/` with three files:
+Typical app layout:
+
+```text
+apps/
+  myapp/
+    docker-compose.yml
+    .env.example
+    myapp.caddy
+    deploy.sh        # optional
+```
+
+Create a folder under `apps/` with these files:
 
 **`apps/myapp/docker-compose.yml`**
 ```yaml
@@ -170,6 +181,13 @@ myapp.{$DOMAIN} {
 Optional: add an executable **`apps/myapp/deploy.sh`** if the app needs release
 steps before the final `docker compose up -d --remove-orphans`.
 
+Make the hook executable in git so it stays executable on the server after
+pulls:
+```bash
+chmod +x apps/myapp/deploy.sh
+git add --chmod=+x apps/myapp/deploy.sh
+```
+
 Example for Django:
 ```bash
 #!/usr/bin/env bash
@@ -186,6 +204,12 @@ include:
 ```
 
 Caddy picks up `myapp.caddy` automatically — no changes to `Caddyfile` needed.
+
+Permission model:
+- Commit `.env.example` files to git as normal templates.
+- Do not commit real `.env` files.
+- Let `~/deploy` reset real `.env` files on the server to mode `600` each run.
+- Let git carry the executable bit for `apps/*/deploy.sh`.
 
 ---
 
