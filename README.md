@@ -127,6 +127,15 @@ The deploy helper also normalizes secret-file permissions on each run:
 
 Those files are set to mode `600` before Compose restarts containers.
 
+Deploy order:
+- `git pull --recurse-submodules`
+- `docker compose pull`
+- run each executable `apps/*/deploy.sh` hook, if present
+- `docker compose up -d --remove-orphans`
+
+That gives each app a repo-local release hook without hard-coding app-specific
+steps into the shared `~/deploy` helper.
+
 ---
 
 ## Add an app
@@ -156,6 +165,18 @@ networks:
 myapp.{$DOMAIN} {
     reverse_proxy myapp:3000
 }
+```
+
+Optional: add an executable **`apps/myapp/deploy.sh`** if the app needs release
+steps before the final `docker compose up -d --remove-orphans`.
+
+Example for Django:
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+docker compose run --rm myapp_django python manage.py migrate
+docker compose run --rm myapp_django python manage.py collectstatic --noinput
 ```
 
 Then add one line to the root `docker-compose.yml`:
