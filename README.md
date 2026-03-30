@@ -172,7 +172,7 @@ Caddy picks up `myapp.caddy` automatically — no changes to `Caddyfile` needed.
 
 Databases are backed up to S3-compatible storage via Restic. Each database
 gets its own repository and encryption key. Backups run hourly by default, and
-repository verification runs weekly by default.
+repository verification runs weekly by default on an explicit off-hour schedule.
 
 **Configure:**
 ```bash
