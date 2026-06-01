@@ -1,5 +1,10 @@
 ---
 include:
   - scaffold/docker/caddy.base.yml
+  # Authentication gateway (passwordless email one-time-code login).
+  # To enable: cp apps/auth/.env.example apps/auth/.env and edit it (set
+  # SESSION_SECRET, ALLOWED_EMAIL_DOMAINS, ADMIN_EMAILS, EMAIL_*), then
+  # uncomment the line below. See scaffold/docs/07-auth.md.
+  # - apps/auth/docker-compose.yml
   # Add one line per app:
   # - apps/myapp/docker-compose.yml

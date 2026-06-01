@@ -213,6 +213,40 @@ Permission model:
 
 ---
 
+## Authentication
+
+This repo ships an optional passwordless login wall (`apps/auth/`) powered by
+[vps-scaffold-auth](https://github.com/uppertoe/vps-scaffold-auth). Users sign in
+with an emailed 6-digit code; apps behind it receive `Remote-User`,
+`Remote-Email`, and `Remote-Groups` headers. It is **off by default**.
+
+**Enable it:**
+```bash
+cp apps/auth/.env.example apps/auth/.env
+$EDITOR apps/auth/.env          # set SESSION_SECRET (openssl rand -hex 32),
+                                # ALLOWED_EMAIL_DOMAINS, ADMIN_EMAILS, EMAIL_*
+```
+Then uncomment the auth line in `docker-compose.yml`:
+```yaml
+include:
+  - scaffold/docker/caddy.base.yml
+  - apps/auth/docker-compose.yml   # ← uncomment
+```
+Point `auth.<your-domain>` DNS at the server and deploy.
+
+**Protect an app** by importing the shared guard in its `.caddy` snippet:
+```caddyfile
+dashboard.{$DOMAIN} {
+    import protected
+    reverse_proxy dashboard:3000
+}
+```
+
+Full details, the admin TOTP option, and a local end-to-end test are in
+[scaffold/docs/07-auth.md](https://github.com/uppertoe/vps-base-template/blob/main/docs/07-auth.md).
+
+---
+
 ## Database backups
 
 Databases are backed up to S3-compatible storage via Restic. Each database
