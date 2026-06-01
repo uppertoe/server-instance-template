@@ -1,8 +1,9 @@
 services:
   auth:
-    # Released tag pinned by digest; Renovate bumps it. The image is distroless
+    # Template default. In your server repo, pin to a released tag by digest
+    # (Renovate's pinDigests does this automatically). The image is distroless
     # and already runs as the nonroot user (65532). See scaffold/docs/08-security-model.md.
-    image: ghcr.io/uppertoe/vps-scaffold-auth:v0.1.0@sha256:dc9b3bd46b5fbc0a0087b5312ed626d496eff27cb4f6531473dc6e2b5564ca2f
+    image: ghcr.io/uppertoe/vps-scaffold-auth:latest
     restart: unless-stopped
     # CIS Docker §5 runtime hardening. The auth binary needs no extra capabilities
     # and binds only an internal port behind Caddy.
