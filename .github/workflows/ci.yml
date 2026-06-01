@@ -75,3 +75,18 @@ jobs:
         with:
           name: container-security-reports
           path: reports/container-security
+
+  forward-auth-security:
+    name: Forward-Auth Security
+    runs-on: ubuntu-latest
+    needs: template-consistency
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Guards the auth lynchpin: the (protected) snippet in apps/auth/auth.caddy
+      # must strip client-supplied Remote-* headers, redirect unauthenticated
+      # requests, and scope protection by path. Uses a mock auth, so no submodule
+      # or OTP login is needed.
+      - name: Verify forward_auth header-stripping and path scoping
+        run: bash scripts/ci-forward-auth-test.sh
