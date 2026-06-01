@@ -33,3 +33,45 @@ jobs:
 
       - name: Run compose smoke test
         run: bash scripts/ci-compose-smoke-test.sh
+
+  container-security:
+    name: App image and compose scan
+    runs-on: ubuntu-latest
+    needs: template-consistency
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Prepare reports directory
+        run: mkdir -p reports/container-security
+
+      # Image CVE scan of every app image — report-only so an unfixable upstream
+      # CVE does not block deploys. Findings surface in the artifact and summary.
+      - name: Trivy image scan (app images)
+        run: |
+          images="$(grep -rhoE 'image:\s*\S+' apps/*/docker-compose.yml | awk '{print $2}' | sort -u)"
+          for img in $images; do
+            safe="$(echo "$img" | tr '/:@' '___')"
+            docker run --rm -v "$PWD/reports/container-security:/out" aquasec/trivy:latest image \
+              --severity HIGH,CRITICAL --no-progress --format table \
+              --output "/out/trivy-${safe}.txt" "$img" || true
+            echo "### Trivy ${img}" >> "$GITHUB_STEP_SUMMARY"
+            tail -n 30 "reports/container-security/trivy-${safe}.txt" >> "$GITHUB_STEP_SUMMARY" || true
+          done
+
+      # Static compose misconfig lint of every app. Fails on HIGH. Excluded query
+      # IDs are the accepted public-reverse-proxy exceptions documented in
+      # scaffold/docs/08-security-model.md.
+      - name: KICS compose scan (apps)
+        run: |
+          docker run --rm -v "$PWD/apps:/path" -v "$PWD/reports/container-security:/out" \
+            checkmarx/kics:latest scan -p /path --type DockerCompose \
+            --exclude-queries 8c978947-0ff6-485c-b0c2-0bfca6026466,bc2908f3-f73c-40a9-8793-c1b7d5544f79,451d79dc-0588-476a-ad03-3c7f0320abb3,ce76b7d0-9e77-464d-b86f-c5c48e03e22d \
+            --report-formats json --output-name kics-apps -o /out --fail-on high
+
+      - name: Upload container security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-security-reports
+          path: reports/container-security

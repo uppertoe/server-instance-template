@@ -147,3 +147,6 @@ wait_for_caddy_healthy
 "${BASE_COMPOSE[@]}" exec -T caddy grep -F 'encode zstd gzip' /tmp/Caddyfile >/dev/null
 "${BASE_COMPOSE[@]}" exec -T caddy grep -F 'local_certs' /tmp/Caddyfile >/dev/null
 assert_https_body "ci.example.com"
+
+echo "Verifying CIS Docker section 5 runtime controls on the running stack"
+python3 scaffold/ansible/files/compose-audit/check-compose-hardening.py
