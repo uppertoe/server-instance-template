@@ -15,6 +15,14 @@ myserver ansible_host=YOUR_SERVER_IP
 # (false) and silently disabled. Audit with the L2 tailoring profile:
 #   -e openscap_tailoring_profile=xccdf_org.ssgproject.content_profile_cis_level2_server_cloud_vps
 # myserver ansible_host=YOUR_SERVER_IP baseline_cis_l2_audit_rules=true
+#
+# The scaffold installs the notify client + AIDE/unit/backup alerting on every
+# host. The bundled ntfy server (apps/ntfy, enabled in docker-compose) is the
+# local destination -- point the notify role at it so alerts are delivered.
+# Mint a publish token once ntfy is up (`./deploy`, then
+# `docker compose exec ntfy ntfy token add admin`) and set it here; the URL
+# stays loopback (phone delivery is a separate opt-in -- see apps/ntfy/README.md):
+# myserver ansible_host=YOUR_SERVER_IP baseline_cis_l2_audit_rules=true notify_ntfy_url=http://127.0.0.1:8080/alerts notify_ntfy_token=tk_REPLACE_WITH_TOKEN
 
 [servers:vars]
 ansible_user=deploy

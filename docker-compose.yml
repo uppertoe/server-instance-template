@@ -1,6 +1,14 @@
 ---
 include:
   - scaffold/docker/caddy.base.yml
+  # Self-hosted ntfy push server -- the DESTINATION for the scaffold's security
+  # alerts (AIDE integrity changes, unit failures, backup failures). Enabled by
+  # default so alerting works out of the box: it publishes locally on
+  # 127.0.0.1:8080 and exposes nothing publicly. Wire the host's notify role to
+  # it (mint a token, then set notify_ntfy_url/notify_ntfy_token -- see
+  # ansible/hosts.example). For phone delivery, point DNS at this host and rename
+  # apps/ntfy/ntfy.caddy.disabled -> ntfy.caddy. See apps/ntfy/README.md.
+  - apps/ntfy/docker-compose.yml
   # Authentication gateway (passwordless email one-time-code login).
   # To enable: cp apps/auth/.env.example apps/auth/.env and edit it (set
   # SESSION_SECRET, ALLOWED_EMAIL_DOMAINS, ADMIN_EMAILS, EMAIL_*), then

@@ -1,0 +1,64 @@
+services:
+  ntfy:
+    # Pin by digest in your server repo (Renovate's pinDigests does this).
+    image: binwiederhier/ntfy:latest
+    command: ["serve"]
+    restart: unless-stopped
+    init: true  # reap the healthcheck's wget zombies (per upstream compose)
+    # CIS Docker §5 runtime hardening. ntfy listens on a high port (8080) so it
+    # needs no privileged-port capability and runs non-root.
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 128m
+    pids_limit: 128
+    env_file:
+      - path: ./.env
+        required: false  # keep `docker compose config` valid in CI without a real .env
+    environment:
+      - TZ=UTC
+      - NTFY_BASE_URL=https://ntfy.${DOMAIN}
+      - NTFY_LISTEN_HTTP=:8080
+      - NTFY_BEHIND_PROXY=true
+      # Private by default: nobody can read/write without an explicit token/user.
+      - NTFY_AUTH_FILE=/var/lib/ntfy/user.db
+      - NTFY_AUTH_DEFAULT_ACCESS=deny-all
+      # Hardened default: serve only the API (no public web UI / login SPA). The
+      # phone app, CLI, on-box vps-notify and the bounce-Lambda all use the API.
+      # Override with NTFY_WEB_ROOT=app in apps/ntfy/.env if you want the browser UI.
+      - NTFY_WEB_ROOT=${NTFY_WEB_ROOT:-disable}
+      - NTFY_ENABLE_SIGNUP=false
+      - NTFY_CACHE_FILE=/var/cache/ntfy/cache.db
+      - NTFY_ATTACHMENT_CACHE_DIR=/var/cache/ntfy/attachments
+    ports:
+      # On-box publishing only: vps-notify (running on the host) POSTs here.
+      # Bound to loopback so it is NOT publicly exposed. Remote subscription
+      # (the phone app) goes through Caddy via ntfy.caddy once DOMAIN is set.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ntfy_cache:/var/cache/ntfy
+      - ntfy_lib:/var/lib/ntfy
+    networks:
+      - caddy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/v1/health | grep -q '\"healthy\":true' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+
+volumes:
+  ntfy_cache:
+  ntfy_lib:
+
+networks:
+  caddy:
+    external: true
+    name: caddy
