@@ -9,6 +9,12 @@
 
 [servers]
 myserver ansible_host=YOUR_SERVER_IP
+# To harden a host to CIS Ubuntu 24.04 Level 2 Server, set the flag as a HOST
+# var on the host line (as below) — NOT under [servers:vars]. As an inventory
+# *group* var it would be outranked by the scaffold's playbook group_vars default
+# (false) and silently disabled. Audit with the L2 tailoring profile:
+#   -e openscap_tailoring_profile=xccdf_org.ssgproject.content_profile_cis_level2_server_cloud_vps
+# myserver ansible_host=YOUR_SERVER_IP baseline_cis_l2_audit_rules=true
 
 [servers:vars]
 ansible_user=deploy
