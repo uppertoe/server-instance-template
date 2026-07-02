@@ -75,8 +75,7 @@ cat > "$WORK/gw.Caddyfile" <<'EOF'
 import /srv/auth.caddy
 http://fa.test {
 	handle /admin/* {
-		import protected
-		reverse_proxy whoami:80
+		import protected whoami:80
 	}
 	handle {
 		reverse_proxy whoami:80
