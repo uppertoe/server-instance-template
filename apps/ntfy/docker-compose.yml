@@ -1,7 +1,8 @@
 services:
   ntfy:
-    # Pin by digest in your server repo (Renovate's pinDigests does this).
-    image: binwiederhier/ntfy:latest
+    # Pinned by digest (supply-chain control; CI's image-pins job enforces it).
+    # Renovate's pinDigests keeps the digest current via PR.
+    image: binwiederhier/ntfy:latest@sha256:cfbbb1bac9196cb711e29ef0ac4adaeb033be6235f1df857705dc39c14384a1d
     command: ["serve"]
     restart: unless-stopped
     init: true  # reap the healthcheck's wget zombies (per upstream compose)
