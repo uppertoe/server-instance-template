@@ -54,3 +54,32 @@ ansible_python_interpreter=/usr/bin/python3
 # baseline_initialize_aide_database=true
 # Enable for Redis or similar workloads that require vm.overcommit_memory=1.
 # host_vm_overcommit_memory_enabled=true
+#
+# --- Compliance/evidence controls (see scaffold/docs/compliance-plan-vic-health.md) ---
+# Encrypted swap is ON by default (random key per boot via crypttab). Disable
+# only with a documented reason:
+# host_swap_encrypted=false
+#
+# External dead-man's switch: the monitor alarms when pings stop — the one
+# alert on-box ntfy can't send. For a self-hosted Gatus on another machine,
+# point at an external-endpoint (heartbeat.interval ~15m on the Gatus side,
+# and make sure Gatus alerts via a channel independent of this VPS):
+# notify_deadman_url=https://gatus.example/api/v1/endpoints/vps_heartbeat/external?success=true
+# notify_deadman_token=REPLACE_WITH_GATUS_ENDPOINT_TOKEN
+# Or a Healthchecks/Uptime Kuma push URL (plain GET, token in the URL):
+# notify_deadman_url=https://hc-ping.com/REPLACE-WITH-UUID
+#
+# Off-host tamper-evident log export (ISM-1988: 12-month retention). Create the
+# Object-Locked bucket + write-only IAM user with scripts/aws-logs-setup.py,
+# then paste the values it prints:
+# log_export_s3_uri=s3://myorg-vps-logs/logs
+# log_export_aws_access_key_id=AKIA...
+# log_export_aws_secret_access_key=...
+# log_export_aws_region=ap-southeast-2
+#
+# Daily CVE scan and patch-SLA check schedules (UTC), if the defaults collide
+# with anything on your host:
+# vuln_scan_schedule=*-*-* 05:41:00
+# common_patch_check_schedule=*-*-* 06:15:00
+# Restore drill (monthly by default; proves backups restore, records RPO/RTO):
+# backup_restore_drill_schedule=*-*-03 04:23:00

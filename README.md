@@ -298,6 +298,26 @@ ansible-playbook -i ansible/hosts ansible/backup.yml
 bash scripts/post-provision-smoke-test.sh myserver --require-backup
 ```
 
+### Off-host log export (compliance evidence)
+
+The scaffold's `log-export` role ships nightly, hash-chained log archives to
+an S3 bucket that even the server's own credentials cannot rewrite (S3 Object
+Lock + a write-only IAM user). Provision the destination from your laptop:
+
+```bash
+pip install boto3
+python3 scripts/aws-logs-setup.py \
+  --profile my-aws-admin \
+  --bucket myserver-logs \
+  --iam-user myserver-log-writer
+```
+
+The helper is idempotent, keeps this bucket separate from the backup bucket
+(different threat model, credentials, and retention), and prints the
+`log_export_*` values to paste into `ansible/hosts`. Re-run
+`site-quick.yml` afterwards to enable the nightly export; verify with
+`sudo tail /var/lib/log-export/hash-chain.log` on the host.
+
 **Adding a database** = copy `backup/services/service.env.example` to
 `backup/services/newservice.env`, fill it in, re-run the playbook.
 
