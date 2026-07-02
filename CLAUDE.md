@@ -58,11 +58,13 @@ Inventory lives in `ansible/hosts` (gitignored; copy `ansible/hosts.example`).
   (`renovate.json`, `pinDigests`) keeps the digests current via PR.
 - **`.caddy` snippets: never put `{` or `}` in a comment** — `run-caddy.sh` counts
   braces when assembling the Caddyfile and unbalanced ones corrupt it.
-- **Protect an app/path with auth:** a protected app adds `import protected` (whole
-  site) or `handle /admin/* { import protected; reverse_proxy … }` (one path). See
-  `scaffold/docs/07-auth.md`. `forward_auth` strips client-supplied `Remote-User` /
-  `Remote-Email` / `Remote-Groups` and injects the auth service's — apps trust only
-  those three headers and publish **no** host ports.
+- **Protect an app/path with auth:** the guard snippets take the upstream as an
+  argument and reverse_proxy it themselves — `import protected app:3000` (whole
+  site) or `handle /admin/* { import protected app:3000 }` (one path). See
+  `scaffold/docs/07-auth.md` and the snippet catalogue in `apps/auth/auth.caddy`.
+  `forward_auth` strips client-supplied `Remote-User` / `Remote-Email` /
+  `Remote-Groups` and injects the auth service's — apps trust only those three
+  headers and publish **no** host ports.
 - **Auth is off by default:** the `apps/auth` include in `docker-compose.yml` is
   commented; enabling needs `apps/auth/.env`. Protected routes `502` until it's on.
 - **Secrets:** per-app `.env` files (gitignored, set to mode 600 on the server by
