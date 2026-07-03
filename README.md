@@ -298,6 +298,24 @@ ansible-playbook -i ansible/hosts ansible/backup.yml
 bash scripts/post-provision-smoke-test.sh myserver --require-backup
 ```
 
+### Secret recovery (env files)
+
+The gitignored `.env` files exist only on the VPS — without an off-host copy,
+losing the box means re-minting every credential even though the databases
+restore cleanly. Enable the bundled files-only backup service:
+
+```bash
+cp backup/services/env-files.env.example backup/services/env-files.env
+$EDITOR backup/services/env-files.env   # set RESTIC_REPOSITORY + RESTIC_PASSWORD
+ansible-playbook -i ansible/hosts ansible/backup.yml
+```
+
+**Store that service's `RESTIC_REPOSITORY` and `RESTIC_PASSWORD` in your
+password manager immediately** — it is the recovery root: the one credential
+pair that unlocks everything else after a total host loss. Restore on a fresh
+box with `sudo /opt/backup/restore.sh --service env-files` before running
+`./deploy`.
+
 ### Off-host log export (compliance evidence)
 
 The scaffold's `log-export` role ships nightly, hash-chained log archives to
