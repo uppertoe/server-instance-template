@@ -26,8 +26,8 @@ services:
       - "com.centurylinklabs.watchtower.enable=false"
 
   ntfy:
-    # Pinned by digest (supply-chain control; CI's image-pins job enforces it).
-    # Renovate's pinDigests keeps the digest current via PR.
+    # Pinned by digest (supply-chain control; CI's image-pins job enforces it;
+    # the weekly digest-freshness workflow flags drift).
     image: binwiederhier/ntfy:latest@sha256:cfbbb1bac9196cb711e29ef0ac4adaeb033be6235f1df857705dc39c14384a1d
     depends_on:
       ntfy-init:

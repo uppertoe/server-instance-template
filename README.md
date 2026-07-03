@@ -298,6 +298,16 @@ ansible-playbook -i ansible/hosts ansible/backup.yml
 bash scripts/post-provision-smoke-test.sh myserver --require-backup
 ```
 
+### Supply-chain digest currency
+
+Every compose image is pinned by digest (CI's `image-pins` job enforces it).
+Currency has two layers: the weekly **Digest Freshness** workflow compares
+each pin to the registry's current digest and opens an issue on drift
+(`bash scripts/check-digest-freshness.sh` runs the same check locally), and —
+recommended — enable the **Mend Renovate GitHub App** on this repo and the
+scaffold so drift arrives as automated bump PRs instead (the committed
+`renovate.json` is already configured for digest pinning).
+
 ### Secret recovery (env files)
 
 The gitignored `.env` files exist only on the VPS — without an off-host copy,
