@@ -43,7 +43,7 @@ require_contains "docker-compose.yml" "  # - apps/auth/docker-compose.yml"
 require_contains ".env.example" "DOMAIN=myserver.example.com"
 require_contains "Caddyfile.local" "    local_certs"
 require_contains "docker-compose.override.yml.example" "      - ./Caddyfile.local:/etc/caddy/Caddyfile:ro"
-require_contains "scripts/post-provision-smoke-test.sh" "check_remote \"~/deploy helper exists and is executable\" \"[[ -x /home/deploy/deploy ]]\""
+require_contains "scripts/post-provision-smoke-test.sh" "check_remote \"deploy helper exists and is executable\" \"sudo test -x /home/deploy/deploy\""
 
 require_not_contains "Caddyfile" "import /srv/repo/apps/*/*.caddy"
 require_not_contains "Caddyfile.local" "import /srv/repo/apps/*/*.caddy"
