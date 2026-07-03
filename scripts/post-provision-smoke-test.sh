@@ -108,14 +108,35 @@ else
 fi
 
 check_remote "SSH login works" "true"
-check_remote "Connected user is deploy" "[[ \$(whoami) == 'deploy' ]]"
-check_remote "Passwordless sudo works" "sudo -n true"
+
+# Access mode detection (docs/05): connect as deploy in the default model, as
+# admin once deploy_restricted_mode is enabled (deploy then has wrapper-only
+# sudo and the sudo-based checks below need the admin identity).
+REMOTE_USER="$(ssh "$HOST_ALIAS" 'whoami' 2>/dev/null || echo unknown)"
+case "$REMOTE_USER" in
+  deploy)
+    header "Access model: default (unrestricted deploy)"
+    check_remote "Passwordless sudo works" "sudo -n true"
+    check_remote "deploy has direct docker access" "docker --version >/dev/null"
+    ;;
+  admin)
+    header "Access model: restricted (connected as admin)"
+    check_remote "admin passwordless sudo works" "sudo -n true"
+    check_remote "deploy sudoers is the wrapper allowlist" "sudo grep -q 'NOPASSWD:/usr/local/sbin/vps-deploy' /etc/sudoers.d/deploy && ! sudo grep -q 'NOPASSWD:ALL' /etc/sudoers.d/deploy"
+    check_remote "deploy is not in the docker group" "! id -nG deploy | tr ' ' '\n' | grep -qx docker"
+    check_remote "wrapper entrypoints installed" "[[ -x /usr/local/sbin/vps-deploy && -x /usr/local/sbin/vps-app-manage && -x /usr/local/sbin/vps-app-logs ]]"
+    check_remote "~deploy/deploy delegates to vps-deploy" "sudo grep -q 'sudo /usr/local/sbin/vps-deploy' /home/deploy/deploy"
+    ;;
+  *)
+    fail "Connected user is deploy or admin (got: $REMOTE_USER)"
+    ;;
+esac
 
 header "Server"
 check_remote "/opt/deploy exists and is owned by deploy" "[[ -d /opt/deploy ]] && [[ \$(stat -c '%U:%G' /opt/deploy) == 'deploy:deploy' ]]"
-check_remote "~/deploy helper exists and is executable" "[[ -x /home/deploy/deploy ]]"
-check_remote "Docker CLI is installed" "docker --version >/dev/null"
-check_remote "Docker Compose plugin is installed" "docker compose version >/dev/null"
+check_remote "deploy helper exists and is executable" "sudo test -x /home/deploy/deploy"
+check_remote "Docker CLI is installed" "sudo docker --version >/dev/null"
+check_remote "Docker Compose plugin is installed" "sudo docker compose version >/dev/null"
 check_remote "Docker service is active" "sudo systemctl is-active --quiet docker"
 check_remote "Docker service is enabled" "sudo systemctl is-enabled --quiet docker"
 check_remote "docker-prune timer is active" "sudo systemctl is-active --quiet docker-prune.timer"
@@ -124,7 +145,7 @@ check_remote "docker-prune timer is enabled" "sudo systemctl is-enabled --quiet 
 header "SSH Hardening"
 check_remote "sshd disables password auth" "sudo sshd -T | grep -Fx 'passwordauthentication no' >/dev/null"
 check_remote "sshd disables root login" "sudo sshd -T | grep -Fx 'permitrootlogin no' >/dev/null"
-check_remote "sshd restricts login to deploy" "sudo sshd -T | grep -Fx 'allowusers deploy' >/dev/null"
+check_remote "sshd restricts login to deploy+admin" "sudo sshd -T | grep -Fx 'allowusers deploy admin' >/dev/null"
 check_remote "sshd sets ClientAliveCountMax to 3" "sudo sshd -T | grep -Fx 'clientalivecountmax 3' >/dev/null"
 check_remote "sshd sets ClientAliveInterval to 300" "sudo sshd -T | grep -Fx 'clientaliveinterval 300' >/dev/null"
 check_remote "sshd sets MaxSessions to 2" "sudo sshd -T | grep -Fx 'maxsessions 2' >/dev/null"

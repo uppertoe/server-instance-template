@@ -83,3 +83,14 @@ ansible_python_interpreter=/usr/bin/python3
 # common_patch_check_schedule=*-*-* 06:15:00
 # Restore drill (monthly by default; proves backups restore, records RPO/RTO):
 # backup_restore_drill_schedule=*-*-03 04:23:00
+#
+# --- Restricted access mode (scaffold/docs/05-access-model.md) ---
+# Removes deploy's root-equivalence: wrapper-only sudo, no docker group. The
+# admin break-glass account is created in BOTH modes; verify it works FIRST
+# (ssh admin@host 'sudo -n true'), then set these as HOST vars and switch
+# ansible_user to admin — deploy can no longer become root:
+# myserver ansible_host=YOUR_SERVER_IP deploy_restricted_mode=true
+# ansible_user=admin
+# Optional: dedicated admin key + allowlisted app-manage verbs:
+# deploy_admin_public_key="ssh-ed25519 AAAA... admin@laptop"
+# deploy_allowed_app_manage_commands='{"migrate": "python manage.py migrate --noinput"}'

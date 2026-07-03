@@ -35,6 +35,11 @@ Inventory lives in `ansible/hosts` (gitignored; copy `ansible/hosts.example`).
   `ssh <host> ./deploy` (git pull --recurse-submodules → `docker compose pull` →
   enforce `.env` perms to 600 → run each executable `apps/*/deploy.sh` hook
   (migrations etc.) → `docker compose up -d --remove-orphans --wait`).
+- **Access model:** `deploy_restricted_mode` (host var) narrows deploy to
+  wrapper-only sudo (no docker group); site plays then run as `admin`
+  (`ansible_user=admin`) and `./deploy` delegates to `sudo vps-deploy`. See
+  `scaffold/docs/05-access-model.md` for the migration runbook. The smoke test
+  is mode-aware (connect as deploy = default mode, admin = restricted).
 - **Audit (run against the real VPS):** `scaffold/ansible/audit-all.yml` is the
   one-command evidence bundle (host captures + all audits, control-tagged
   INDEX). Individually: `audit-openscap.yml` (CIS OS, tailored),
