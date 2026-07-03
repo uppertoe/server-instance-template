@@ -1,8 +1,37 @@
 services:
+  # One-shot volume initialiser: fresh named volumes are root-owned, and the
+  # hardened ntfy below runs as 1000 — it dies at startup unable to create its
+  # user/cache DBs on a first provision (long-lived hosts never noticed:
+  # their volumes predate the non-root hardening). Same pattern as caddy-init.
+  ntfy-init:
+    image: binwiederhier/ntfy:latest@sha256:cfbbb1bac9196cb711e29ef0ac4adaeb033be6235f1df857705dc39c14384a1d
+    restart: "no"
+    user: "0:0"
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    mem_limit: 64m
+    pids_limit: 32
+    network_mode: none
+    entrypoint: ["/bin/sh", "-c", "chown -R 1000:1000 /var/cache/ntfy /var/lib/ntfy"]
+    volumes:
+      - ntfy_cache:/var/cache/ntfy
+      - ntfy_lib:/var/lib/ntfy
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+
   ntfy:
     # Pinned by digest (supply-chain control; CI's image-pins job enforces it).
     # Renovate's pinDigests keeps the digest current via PR.
     image: binwiederhier/ntfy:latest@sha256:cfbbb1bac9196cb711e29ef0ac4adaeb033be6235f1df857705dc39c14384a1d
+    depends_on:
+      ntfy-init:
+        condition: service_completed_successfully
     command: ["serve"]
     restart: unless-stopped
     init: true  # reap the healthcheck's wget zombies (per upstream compose)
