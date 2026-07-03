@@ -48,4 +48,12 @@ require_contains "scripts/post-provision-smoke-test.sh" "check_remote \"~/deploy
 require_not_contains "Caddyfile" "import /srv/repo/apps/*/*.caddy"
 require_not_contains "Caddyfile.local" "import /srv/repo/apps/*/*.caddy"
 
+# Repo tooling must at least parse — cheap insurance for the setup helpers.
+for f in scripts/*.sh; do
+  bash -n "$f" || fail "bash syntax error in $f"
+done
+for f in scripts/*.py; do
+  python3 -m py_compile "$f" || fail "python syntax error in $f"
+done
+
 echo "Template consistency checks passed."

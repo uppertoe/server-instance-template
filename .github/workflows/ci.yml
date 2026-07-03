@@ -17,6 +17,24 @@ jobs:
       - name: Run template consistency checks
         run: bash scripts/check-template-consistency.sh
 
+  image-pins:
+    name: Image Digest Pins
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Sync scaffold submodule
+        run: |
+          git config --global url."https://github.com/".insteadOf git@github.com:
+          git submodule sync --recursive
+          git submodule update --init --recursive
+
+      # Supply-chain gate: every compose image (apps + scaffold caddy base)
+      # must be pinned by digest. Renovate's pinDigests keeps pins current.
+      - name: Verify all images are pinned by digest
+        run: bash scripts/check-image-pins.sh
+
   compose-smoke:
     name: Compose Smoke
     runs-on: ubuntu-latest
