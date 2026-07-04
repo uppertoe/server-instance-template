@@ -298,6 +298,24 @@ ansible-playbook -i ansible/hosts ansible/backup.yml
 bash scripts/post-provision-smoke-test.sh myserver --require-backup
 ```
 
+### Cloud-side security review (Prowler)
+
+The S3/IAM posture that the backup and log-export controls depend on lives in
+AWS, outside anything the VPS audits can see. Review it quarterly from your
+laptop with [Prowler](https://github.com/prowler-cloud/prowler), scoped to the
+services this stack uses:
+
+```bash
+pipx install prowler
+prowler aws --profile my-aws-admin -f ap-southeast-2 \
+  --services s3 iam \
+  --output-directory reports/prowler-$(date +%Y%m%d)
+```
+
+Review FAILs against the intended design (Object-Lock log bucket, write-only
+log IAM user, prefix-scoped backup user) and file the report with the audit
+pack. Not run from CI by design — it needs your admin credentials.
+
 ### Supply-chain digest currency
 
 Every compose image is pinned by digest (CI's `image-pins` job enforces it).
