@@ -6,13 +6,16 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   template-consistency:
     name: Template Consistency
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Run template consistency checks
         run: bash scripts/check-template-consistency.sh
@@ -22,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Sync scaffold submodule
         run: |
@@ -41,7 +44,7 @@ jobs:
     needs: template-consistency
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Sync scaffold submodule
         run: |
@@ -58,7 +61,7 @@ jobs:
     needs: template-consistency
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Prepare reports directory
         run: mkdir -p reports/container-security
@@ -89,7 +92,7 @@ jobs:
 
       - name: Upload container security reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: container-security-reports
           path: reports/container-security
@@ -100,7 +103,7 @@ jobs:
     needs: template-consistency
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       # Guards the auth lynchpin: the (protected) snippet in apps/auth/auth.caddy
       # must strip client-supplied Remote-* headers, redirect unauthenticated
