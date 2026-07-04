@@ -94,3 +94,11 @@ ansible_python_interpreter=/usr/bin/python3
 # Optional: dedicated admin key + allowlisted app-manage verbs:
 # deploy_admin_public_key="ssh-ed25519 AAAA... admin@laptop"
 # deploy_allowed_app_manage_commands='{"migrate": "python manage.py migrate --noinput"}'
+
+# --- Hands-off updates ----------------------------------------------------
+# Daily CI-gated auto-apply of upstream repo changes (compose/Caddy layer):
+# Renovate automerges digest/submodule bumps on green CI; this timer applies
+# them on the box with ntfy announcements. Opt-in.
+# deploy_auto_update=true
+# The weekly scaffold-drift alert (enabled by default) tells you when
+# Ansible-layer changes are waiting in UPGRADING.md.
