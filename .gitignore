@@ -13,3 +13,6 @@ __pycache__/
 
 # Security audit reports (regenerable; can be large).
 reports/
+
+# Instance-specific compliance evidence — never in the public template
+compliance/
