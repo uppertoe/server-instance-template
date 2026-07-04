@@ -124,7 +124,7 @@ case "$REMOTE_USER" in
     check_remote "admin passwordless sudo works" "sudo -n true"
     check_remote "deploy sudoers is the wrapper allowlist" "sudo grep -q 'NOPASSWD:/usr/local/sbin/vps-deploy' /etc/sudoers.d/deploy && ! sudo grep -q 'NOPASSWD:ALL' /etc/sudoers.d/deploy"
     check_remote "deploy is not in the docker group" "! id -nG deploy | tr ' ' '\n' | grep -qx docker"
-    check_remote "wrapper entrypoints installed" "[[ -x /usr/local/sbin/vps-deploy && -x /usr/local/sbin/vps-app-manage && -x /usr/local/sbin/vps-app-logs ]]"
+    check_remote "wrapper entrypoints installed" "sudo test -x /usr/local/sbin/vps-deploy && sudo test -x /usr/local/sbin/vps-app-manage && sudo test -x /usr/local/sbin/vps-app-logs"
     check_remote "~deploy/deploy delegates to vps-deploy" "sudo grep -q 'sudo /usr/local/sbin/vps-deploy' /home/deploy/deploy"
     ;;
   *)
@@ -145,7 +145,7 @@ check_remote "docker-prune timer is enabled" "sudo systemctl is-enabled --quiet 
 header "SSH Hardening"
 check_remote "sshd disables password auth" "sudo sshd -T | grep -Fx 'passwordauthentication no' >/dev/null"
 check_remote "sshd disables root login" "sudo sshd -T | grep -Fx 'permitrootlogin no' >/dev/null"
-check_remote "sshd restricts login to deploy+admin" "sudo sshd -T | grep -Fx 'allowusers deploy admin' >/dev/null"
+check_remote "sshd restricts login to deploy+admin" "sudo sshd -T | grep -Fx 'allowusers deploy' >/dev/null && sudo sshd -T | grep -Fx 'allowusers admin' >/dev/null"
 check_remote "sshd sets ClientAliveCountMax to 3" "sudo sshd -T | grep -Fx 'clientalivecountmax 3' >/dev/null"
 check_remote "sshd sets ClientAliveInterval to 300" "sudo sshd -T | grep -Fx 'clientaliveinterval 300' >/dev/null"
 check_remote "sshd sets MaxSessions to 2" "sudo sshd -T | grep -Fx 'maxsessions 2' >/dev/null"
@@ -153,7 +153,7 @@ check_remote "sshd sets MaxAuthTries to 3" "sudo sshd -T | grep -Fx 'maxauthtrie
 check_remote "sshd sets LoginGraceTime to 60" "sudo sshd -T | grep -Fx 'logingracetime 60' >/dev/null"
 check_remote "sshd sets LogLevel to INFO" "sudo sshd -T | grep -Fx 'loglevel INFO' >/dev/null"
 check_remote "SSH banner points at /etc/issue.net" "sudo sshd -T | grep -Fx 'banner /etc/issue.net' >/dev/null"
-check_remote "sshd uses benchmark MACs" "sudo sshd -T | grep -Fx 'macs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256' >/dev/null"
+check_remote "sshd uses benchmark MACs" "sudo sshd -T | grep -Fx 'macs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com' >/dev/null"
 check_remote "SSH hardening drop-in is locked down" "[[ -f /etc/ssh/sshd_config.d/00-vps-scaffold-hardening.conf ]] && [[ \$(stat -c '%a' /etc/ssh/sshd_config.d/00-vps-scaffold-hardening.conf) == '600' ]]"
 check_remote "SSH banner file is present" "[[ -f /etc/issue.net ]]"
 check_remote "Root password is locked" "sudo passwd -S root | awk '{print \$2}' | grep -qx 'L'"
