@@ -48,6 +48,8 @@ jobs:
           - [ ] Recovery bundle: re-run \`scripts/make-recovery-bundle.sh\` if any credential changed; verify the offsite copy decrypts
           - [ ] Rebuild drill (annual): if none logged this year, walk \`scaffold/docs/09-recovery.md\` and record the RTO
           - [ ] Skim the accepted-exceptions register (\`scaffold/docs/08-security-model.md\`) — still true?
+          - [ ] Access review (quarterly, keep the dated record): \`authorized_keys\` on the box, admin emails in the auth tier, S3/SMTP/ntfy credentials still needed and least-privilege, GitHub collaborators + branch-protection settings intact
+          - [ ] Incident-response contacts in the instance runbook still current (DH eHealth IMT, health-service CISO)
           - [ ] Run the cloud-side Prowler review (README → "Cloud-side security review")
           - [ ] Check the ntfy monthly self-test actually arrived on your phone this month
           EOF
