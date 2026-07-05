@@ -97,7 +97,7 @@ jobs:
           images="$(grep -rhoE 'image:\s*\S+' apps/*/docker-compose.yml | awk '{print $2}' | sort -u)"
           for img in $images; do
             safe="$(echo "$img" | tr '/:@' '___')"
-            docker run --rm -v "$PWD/reports/container-security:/out" aquasec/trivy:latest image \
+            docker run --rm -v "$PWD/reports/container-security:/out" aquasec/trivy:latest@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image \
               --severity HIGH,CRITICAL --no-progress --format table \
               --output "/out/trivy-${safe}.txt" "$img" || true
             echo "### Trivy ${img}" >> "$GITHUB_STEP_SUMMARY"
@@ -110,7 +110,7 @@ jobs:
       - name: KICS compose scan (apps)
         run: |
           docker run --rm -v "$PWD/apps:/path" -v "$PWD/reports/container-security:/out" \
-            checkmarx/kics:latest scan -p /path --type DockerCompose \
+            checkmarx/kics:latest@sha256:3e5a268eb8adda2e5a483c9359ddfc4cd520ab856a7076dc0b1d8784a37e2602 scan -p /path --type DockerCompose \
             --exclude-queries 8c978947-0ff6-485c-b0c2-0bfca6026466,bc2908f3-f73c-40a9-8793-c1b7d5544f79,451d79dc-0588-476a-ad03-3c7f0320abb3,ce76b7d0-9e77-464d-b86f-c5c48e03e22d \
             --report-formats json --output-name kics-apps -o /out --fail-on high
 
