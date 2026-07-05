@@ -430,6 +430,13 @@ docker compose exec caddy caddy trust   # once per machine — adds CA to keycha
 
 ## Security auditing
 
+**Compliance pack:** `docs/compliance-pack/` is a filled worked example of the
+scaffold's evidence templates (SSP, asset register, scope determination,
+jurisdiction record, retention design, IR runbook, access-review log, control
+matrix) for this template's staging instance. For a real deployment, re-answer
+the scope determination first, then re-fill the `⟨fill at commissioning⟩`
+fields — see its README.
+
 Run against a real provisioned VPS (not locally):
 
 ```bash

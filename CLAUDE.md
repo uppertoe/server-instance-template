@@ -33,6 +33,12 @@ handful of web-app containers.
   `09-recovery.md` (recovery bundle + rebuild drill), `10-lts-migration.md`
   (OS release jumps), `11-incident-response.md` (containment → notification →
   rebuild).
+- **`docs/compliance-pack/`** is the filled Vic-health evidence pack for the
+  staging instance (worked example of `scaffold/docs/templates/`). Real
+  deployments re-answer `scope-determination.md` first, then re-fill the
+  `⟨fill at commissioning⟩` fields. Tripwire running through it: the first
+  app holding identifiable health information forces AU hosting,
+  health-service commissioning, TOTP, and at-rest encryption.
 
 ## Lifecycle / commands
 
