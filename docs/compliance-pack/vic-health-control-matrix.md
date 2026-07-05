@@ -37,7 +37,7 @@ playbooks) or `CI`.
 | 24 | Incident response incl. DH 1-hour pathway | — | — | — | Std 6 | [incident-response-runbook.md](incident-response-runbook.md) + scaffold docs/11 | runbook; annual test record | ⚠️ DH tree dormant until commissioning; first tabletop pending |
 | 25 | Quarterly access review | 4.1 | — | restrict admin | E11.120 / Std 4 | [access-review.md](access-review.md), prompted by maintenance-day issue | dated entries | ✅ (log started) |
 | 26 | Secrets handling: 0600 files, AIDE-monitored, encrypted offsite copies, documented rotation | 4.1 | 1449 analog | — | E11.150 | `.env` pattern + recovery bundle + env-files restic | recovery-bundle entry; `restic snapshots --tag env-files` | ✅ |
-| 27 | EDR or accepted compensating controls | — | — | — | — | auditd+AIDE+real-time ntfy+Trivy+watchers stack | written acceptance from health service | ➖ C2 — at commissioning |
+| 27 | EDR or documented compensating controls | — | — | — | — | auditd+AIDE+real-time ntfy+Trivy+watchers stack | this matrix + audit bundle; written acceptance only if operated for a health service | ➖ C2 — health-service context only |
 | 28 | Supply-chain: SHA-pinned actions, CodeQL, Scorecard, branch protection + CODEOWNERS | — | 1409 supply | — | Std 8 | `.github/` workflows + CODEOWNERS | Scorecard report; CI runs | ⚠️ enable branch protection + code-owner review in GitHub settings |
 
 **Version note (2026-07-05):** measurement of record is CIS Ubuntu 24.04

@@ -10,7 +10,7 @@ notification rows are live.
 
 > **Status: no health information is held**, so the DH/eHealth rows below are
 > DORMANT. They activate — and this runbook must be re-issued with real
-> contacts — the day this instance is commissioned for health-service use.
+> contacts — if this instance ever operates for/within a health service.
 > DH Policy & Funding Guidelines §24.4: significant ICT incidents go to the
 > eHealth Incident Management Team **within the hour**; all cyber incidents
 > (including supplier breaches) as soon as detected **or suspected**.

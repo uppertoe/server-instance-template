@@ -15,10 +15,13 @@ trail. The gitignored `compliance/` directory remains for raw evidence dumps
 that should never reach a public fork.
 
 **The one rule that runs through every document here:** the moment any app on
-an instance holds identifiable health information, the deferred decisions
-activate — hosting jurisdiction (AU region), health-service commissioning,
-TOTP, at-rest encryption, and the DH incident clock. Each document marks its
-own tripwire.
+an instance holds identifiable health information, the substantive
+requirements activate — hosting jurisdiction (AU region), TOTP, at-rest
+encryption, retention discipline — plus the DH incident clock if the system
+operates for a health service. Each document marks its own tripwire. The
+pack's purpose is that the system meets the privacy and security requirements
+*demonstrably, on its merits* — a standard the paper-and-spreadsheet status
+quo it replaces never meets.
 
 | Document | Status for staging |
 |---|---|

@@ -37,8 +37,10 @@ handful of web-app containers.
   staging instance (worked example of `scaffold/docs/templates/`). Real
   deployments re-answer `scope-determination.md` first, then re-fill the
   `⟨fill at commissioning⟩` fields. Tripwire running through it: the first
-  app holding identifiable health information forces AU hosting,
-  health-service commissioning, TOTP, and at-rest encryption.
+  app holding identifiable health information forces AU hosting, TOTP, and
+  at-rest encryption (the substantive HPP obligations); the DH layer applies
+  only when operating for a health service. The pack's job is demonstrable
+  compliance on the merits, not institutional sign-off.
 
 ## Lifecycle / commands
 
