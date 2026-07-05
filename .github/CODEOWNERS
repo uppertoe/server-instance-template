@@ -1,0 +1,23 @@
+# CODEOWNERS — the human-authored repo-to-root surface of this VPS.
+#
+# Anything listed here can execute code as root on the server via the deploy
+# path (see scaffold/docs/05-access-model.md, "The Repo-to-Root Trust
+# Boundary"), so it always requires an owner's review. Enable "Require review
+# from Code Owners" in branch protection for this to be enforced.
+#
+# Deliberately NOT listed: compose files, workflow action pins and the
+# scaffold submodule pointer. Renovate automerges digest/pointer bumps to
+# those, and their guard is CI + the 3-day minimumReleaseAge cooldown — adding
+# them here would silently disable the hands-off update path. Structural
+# (non-bot) changes to those files still get normal PR review.
+#
+# Replace @uppertoe with this repo's actual owner(s)/team.
+
+# Deploy hooks run as root on the VPS and are only ever human-authored.
+apps/*/deploy.sh   @uppertoe
+
+# Renovate config controls what may automerge at all.
+renovate.json      @uppertoe
+
+# CODEOWNERS itself.
+/.github/CODEOWNERS @uppertoe
