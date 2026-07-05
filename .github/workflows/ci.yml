@@ -60,6 +60,22 @@ jobs:
           git submodule sync --recursive
           git submodule update --init --recursive
 
+      # The per-app proxy-network wiring relies on Compose include-merge of
+      # partial service stanzas, which the runner's bundled compose predates
+      # ("services.caddy conflicts with imported resource"). Install the same
+      # docker-compose-plugin production hosts get from Docker's apt repo
+      # (the scaffold docker role), so CI tests what production runs.
+      - name: Install current docker-compose-plugin (match production)
+        run: |
+          sudo install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+            | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+            | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+          sudo apt-get update -q
+          sudo apt-get install -y -q docker-compose-plugin
+          docker compose version
+
       - name: Run compose smoke test
         run: bash scripts/ci-compose-smoke-test.sh
 
