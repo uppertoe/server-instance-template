@@ -5,9 +5,16 @@ operating relationship changes. Sources: PDP Act 2014 (Vic) ss 84, 88;
 Health Records Act 2001 (Vic); DH Policy & Funding Guidelines §24; SOCI Act;
 Privacy Act 1988 (Cth). Background: scaffold docs/compliance-plan-vic-health.md §1.
 
+**Standing intent (2026-07-05): this platform is not, and is not planned to
+be, a host for patient data.** It runs operational/personal tooling in a
+hospital-adjacent context. The tripwires below are therefore *guardrails
+against scope creep*, not a roadmap — they exist so that if intent ever
+changes, the forcing requirements are already written down rather than
+discovered late.
+
 | Question | Answer | Consequence |
 |---|---|---|
-| Does the system hold **health information** collected in Victoria? | **No.** Apps: ntfy (host security alerts), auth service (disabled; would hold operator email only). No clinical apps deployed. | HRA HPPs dormant. **Tripwire: the first app holding any identifiable health information re-opens this whole pack** — jurisdiction record and commissioning first. |
+| Does the system hold **health information** collected in Victoria? | **No — and none is intended.** Apps: ntfy (host security alerts), auth service (disabled; would hold operator email only). No clinical apps deployed or planned. | HRA HPPs dormant. **Tripwire: the first app holding any identifiable health information re-opens this whole pack** — jurisdiction record first. |
 | Is the operator a **contracted service provider to a PDP Act Part 4 body**? | **No.** The operator is an *employed* specialist clinician at a Victorian public health service, not a contractor supplying services to the Department or a Part 4 body. No relevant contract exists. | VPDSS s 88(2) flow-down does **not** apply to the operator; no SRPA/PDSP/attestation obligation (the Jul–Aug 2026 PDSP window is not ours to meet). |
 | Is the system operated **for/within a public health service** subject to the DH Policy & Funding Guidelines? | **Not currently.** Staging is personal infrastructure holding no health-service data. | Dormant. The DH Baseline Controls, VMIA self-assessment and §24.4 one-hour clock formally bind the *health service*, not an individual clinician. What makes handling patient data lawful is meeting the substantive HPP obligations — security (4.1), retention (4.2–4.4), jurisdiction (9) — which this platform's controls and this pack evidence, to a standard far beyond the spreadsheets and paper that clinical data commonly lives on. Whether and how to engage the organisation's processes is an employment-risk judgement for the operator, not a precondition of privacy compliance; record the position taken, and keep this pack current — it is the defensibility evidence either way. |
 | Is the host part of a **SOCI-designated critical hospital's** infrastructure? | **No.** Personal VPS, not hospital infrastructure. | No CIRMP obligations. Re-ask at commissioning. |

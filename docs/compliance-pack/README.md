@@ -3,7 +3,8 @@
 This is the scaffold's `docs/templates/` set **filled in for this template's
 staging reference instance**: a single VPS run by an *employed* clinician,
 hosting only the bundled operational apps (ntfy; auth disabled), holding **no
-health information**. It exists so that (a) the staging box itself has an
+health information — with no intention of ever hosting patient data on this
+stack** (see the standing-intent note in the scope determination). It exists so that (a) the staging box itself has an
 honest, complete evidence pack, and (b) a real deployment starts from a
 worked example instead of blank angle brackets.
 
