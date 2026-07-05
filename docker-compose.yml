@@ -1,6 +1,10 @@
 ---
 include:
   - scaffold/docker/caddy.base.yml
+  # Generated per-app proxy-network wiring (committed; CI checks it is in
+  # sync). After adding/removing an app below, re-render and commit:
+  #   bash scaffold/docker/render-caddy-routes.sh
+  - .generated/caddy/networks.yml
   # Self-hosted ntfy push server -- the DESTINATION for the scaffold's security
   # alerts (AIDE integrity changes, unit failures, backup failures). Enabled by
   # default so alerting works out of the box: it publishes locally on

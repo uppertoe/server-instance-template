@@ -68,6 +68,14 @@ ansible_python_interpreter=/usr/bin/python3
 # notify_deadman_token=REPLACE_WITH_GATUS_ENDPOINT_TOKEN
 # Or a Healthchecks/Uptime Kuma push URL (plain GET, token in the URL):
 # notify_deadman_url=https://hc-ping.com/REPLACE-WITH-UUID
+# The heartbeat is REQUIRED: provisioning fails when unset. To knowingly run
+# without one (the host's own death becomes invisible):
+# notify_deadman_accept_none=true
+#
+# Patch-window reboots (kernel updates only apply after one) happen at 04:30
+# by default; vps-boot-check pushes the outcome via ntfy. Adjust or disable:
+# common_automatic_reboot_time=04:30
+# common_automatic_reboot_enabled=false
 #
 # Off-host tamper-evident log export (ISM-1988: 12-month retention). Create the
 # Object-Locked bucket + write-only IAM user with scripts/aws-logs-setup.py,

@@ -3,27 +3,22 @@
 # the ~/deploy helper. Idempotent.
 set -euo pipefail
 
-# 1. Create the named volumes (first `up` may crash-loop until perms are fixed —
-#    that's expected and handled in step 2).
-docker compose up -d ntfy || true
+# Start ntfy through compose so the digest-pinned ntfy-init service owns the
+# volume-permission fix. Do not use ad-hoc helper images here; CI only enforces
+# image pinning and runtime controls for declared compose services.
+docker compose up -d --wait ntfy
 
-# 2. Named volumes are root-owned on creation; ntfy runs non-root (CIS §5), so
-#    chown them. Done via a plain busybox container — a `compose run` here fails
-#    silently because the ntfy service has read_only rootfs.
-lib_vol="$(docker volume ls -q | grep -E '_ntfy_lib$'   | head -1)"
-cache_vol="$(docker volume ls -q | grep -E '_ntfy_cache$' | head -1)"
-docker run --rm -v "${lib_vol}:/lib" -v "${cache_vol}:/cache" busybox \
-  chown -R 1000:1000 /lib /cache
-
-# 3. Recreate ntfy now that its data dirs are writable.
-docker compose up -d --force-recreate ntfy
-
-# 3. Bootstrap the admin user (password from apps/ntfy/.env) if it is missing.
+# Bootstrap the admin user (password from apps/ntfy/.env) if it is missing.
 # Idempotent by attempting the add and tolerating the "already exists" outcome,
 # rather than pre-checking `ntfy user list`: just after the force-recreate above
 # the container can answer an empty list before its auth DB is ready, which would
 # make the pre-check spuriously add and then abort the whole deploy (set -e).
-if [ -f apps/ntfy/.env ]; then set -a; . apps/ntfy/.env; set +a; fi
+if [ -f apps/ntfy/.env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . apps/ntfy/.env
+  set +a
+fi
 if [ -n "${NTFY_ADMIN_PASSWORD:-}" ]; then
   if add_out=$(docker compose exec -T -e "NTFY_PASSWORD=${NTFY_ADMIN_PASSWORD}" ntfy \
         ntfy user add --role=admin admin 2>&1); then

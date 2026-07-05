@@ -22,6 +22,7 @@
         "pinDigest"
       ],
       "groupName": "docker image digests",
+      "minimumReleaseAge": "3 days",
       "automerge": true
     },
     {
