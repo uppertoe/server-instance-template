@@ -30,8 +30,8 @@ auth.{$DOMAIN} {
 # who is signed in but not allowed on THIS app is sent to a friendly
 # "no access" page with a sign-in link -- never bounced back to login.
 #
-# NOTE: keep comments in .caddy files free of braces -- the scaffold's
-# run-caddy.sh counts braces when assembling the Caddyfile.
+# NOTE: keep comments in .caddy files free of braces -- the scaffold's route
+# renderer counts braces when assembling the Caddyfile bundle.
 #
 # Usage (domains and groups are space/comma-separated; UPSTREAM is host:port):
 #   import protected UPSTREAM                       -- any signed-in user; NOT break-glass

@@ -24,6 +24,7 @@ services:
       - ntfy_lib:/var/lib/ntfy
     labels:
       - "com.centurylinklabs.watchtower.enable=false"
+      - "vps-scaffold.audit=init-volume-owner"
 
   ntfy:
     # Pinned by digest (supply-chain control; CI's image-pins job enforces it;
@@ -73,8 +74,8 @@ services:
     volumes:
       - ntfy_cache:/var/cache/ntfy
       - ntfy_lib:/var/lib/ntfy
-    networks:
-      - caddy
+    # Proxy-network wiring is generated (.generated/caddy/networks.yml): ntfy
+    # joins only its own ntfy_proxy network, which Caddy also joins.
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/v1/health | grep -q '\"healthy\":true' || exit 1"]
       interval: 30s
@@ -87,9 +88,3 @@ services:
 volumes:
   ntfy_cache:
   ntfy_lib:
-
-# Must be byte-identical to the stanza in scaffold/docker/caddy.base.yml:
-# Compose v5 include-merge rejects conflicting definitions of the same network.
-networks:
-  caddy:
-    name: caddy  # fixed name so app containers can join it

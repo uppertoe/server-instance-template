@@ -14,14 +14,24 @@ handful of web-app containers.
   docs: edit them in the **`vps-base-template`** repo, push, then bump the pointer
   here (`git -C scaffold checkout <commit> && git add scaffold && git commit`).
 - **`docker-compose.yml`** uses Compose `include:` to assemble
-  `scaffold/docker/caddy.base.yml` + each app's compose into one stack.
+  `scaffold/docker/caddy.base.yml` + `.generated/caddy/networks.yml` + each
+  app's compose into one stack.
 - **`apps/<name>/`** is one app: `docker-compose.yml`, `.env.example`, `<name>.caddy`.
-- **`Caddyfile`** is intentionally near-empty — every `apps/*/*.caddy` snippet is
-  appended automatically at container start. Don't add routes here.
-- **The detailed docs live in `scaffold/docs/01`–`08`.** Prefer pointing the user
+  The web-facing service must be named after the folder (`apps/ntfy/` → `ntfy`).
+- **`.generated/caddy/` is generated-but-committed** (like a lockfile) by
+  `bash scaffold/docker/render-caddy-routes.sh`: `apps.caddy` bundles every
+  `apps/*/*.caddy` route (mounted into Caddy — the container never mounts the
+  repo, keeping secrets off the proxy) and `networks.yml` wires one private
+  proxy network per app. Re-render + commit after any app change; CI fails on
+  drift. Never edit these files by hand.
+- **`Caddyfile`** is intentionally near-empty — routes live in the app snippets
+  and the rendered bundle. Don't add routes here.
+- **The detailed docs live in `scaffold/docs/01`–`10`.** Prefer pointing the user
   there over re-explaining. Most relevant: `04-server-repo.md` (adding apps),
   `06-auditing.md` (audits), `07-auth.md` (login wall), `08-security-model.md`
-  (which benchmark governs each layer + the accepted-exceptions register).
+  (which benchmark governs each layer + the accepted-exceptions register),
+  `09-recovery.md` (recovery bundle + rebuild drill), `10-lts-migration.md`
+  (OS release jumps).
 
 ## Lifecycle / commands
 
@@ -61,8 +71,8 @@ Inventory lives in `ansible/hosts` (gitignored; copy `ansible/hosts.example`).
   bundled `apps/auth` and `apps/ntfy`. CI's `image-pins` job
   (`scripts/check-image-pins.sh`) fails on any unpinned image; Renovate
   (`renovate.json`, `pinDigests`) keeps the digests current via PR.
-- **`.caddy` snippets: never put `{` or `}` in a comment** — `run-caddy.sh` counts
-  braces when assembling the Caddyfile and unbalanced ones corrupt it.
+- **`.caddy` snippets: never put `{` or `}` in a comment** — the route renderer
+  counts braces when assembling the Caddyfile bundle and unbalanced ones corrupt it.
 - **Protect an app/path with auth:** the guard snippets take the upstream as an
   argument and reverse_proxy it themselves — `import protected app:3000` (whole
   site) or `handle /admin/* { import protected app:3000 }` (one path). See
@@ -74,16 +84,21 @@ Inventory lives in `ansible/hosts` (gitignored; copy `ansible/hosts.example`).
   commented; enabling needs `apps/auth/.env`. Protected routes `502` until it's on.
 - **Secrets:** per-app `.env` files (gitignored, set to mode 600 on the server by
   `./deploy`). Never commit a real `.env`; always keep an `.env.example`.
-- **Caddy is the only thing that publishes ports** (80/443). Apps join the external
-  `caddy` network and are reached by service name (e.g. `reverse_proxy myapp:3000`).
+- **Caddy is the only thing that publishes ports** (80/443). Each app gets its
+  own generated proxy network (`<name>_proxy`) that only Caddy shares — never
+  hand-wire proxy networks in app compose files, and never put two apps on one
+  network (`audit-compose.yml` fails if they share a Caddy-reachable network).
+  Private backend networks (app ↔ its own db) are still defined in the app file.
 - **`scripts/check-template-consistency.sh`** asserts required files exist — run it
   after adding/removing app scaffolding.
 
 ## When making changes
 
 - Adding an app: create `apps/<name>/{docker-compose.yml,.env.example,<name>.caddy}`
-  (with the §5 block + an `import protected` if it should require login), then add
-  one `include:` line to `docker-compose.yml`. See `scaffold/docs/04-server-repo.md`.
+  (with the §5 block + an `import protected` if it should require login), add
+  one `include:` line to `docker-compose.yml`, then re-render the bundle:
+  `bash scaffold/docker/render-caddy-routes.sh && git add .generated`.
+  See `scaffold/docs/04-server-repo.md`.
 - Host hardening / benchmark / audit changes belong in **`vps-base-template`**, not
   here — then bump the `scaffold` submodule.
 - Keep CI green: `compose-smoke`, `forward-auth-security`, `container-security`,

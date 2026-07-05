@@ -153,20 +153,14 @@ apps/
 
 Create a folder under `apps/` with these files:
 
-**`apps/myapp/docker-compose.yml`**
+**`apps/myapp/docker-compose.yml`** — the web-facing service must be named
+after the app folder; network wiring is generated, so don't add any:
 ```yaml
 services:
   myapp:
-    image: yourorg/myapp:latest
+    image: yourorg/myapp:1.2.3@sha256:...
     restart: unless-stopped
     env_file: apps/myapp/.env
-    networks:
-      - caddy
-
-networks:
-  caddy:
-    external: true
-    name: caddy
 ```
 
 **`apps/myapp/.env.example`** — list every required variable (no values)
@@ -203,7 +197,17 @@ include:
   - apps/myapp/docker-compose.yml
 ```
 
-Caddy picks up `myapp.caddy` automatically — no changes to `Caddyfile` needed.
+and re-render the committed Caddy bundle (routes + per-app proxy networks):
+```bash
+bash scaffold/docker/render-caddy-routes.sh
+git add .generated
+```
+
+`.generated/caddy/` is generated-but-committed, like a lockfile: `apps.caddy`
+carries every app's routes (Caddy mounts this file, never the repo itself, so
+secrets stay off the reverse proxy) and `networks.yml` gives each app a private
+proxy network that only Caddy shares — apps cannot reach each other. CI fails
+if the bundle drifts from the sources.
 
 Permission model:
 - Commit `.env.example` files to git as normal templates.
@@ -237,8 +241,7 @@ Point `auth.<your-domain>` DNS at the server and deploy.
 **Protect an app** by importing the shared guard in its `.caddy` snippet:
 ```caddyfile
 dashboard.{$DOMAIN} {
-    import protected
-    reverse_proxy dashboard:3000
+    import protected dashboard:3000
 }
 ```
 
@@ -297,6 +300,22 @@ ansible-playbook -i ansible/hosts ansible/backup.yml
 # Then rerun the smoke test in strict backup mode:
 bash scripts/post-provision-smoke-test.sh myserver --require-backup
 ```
+
+### Recovery bundle (do this once, now)
+
+Backups prove the *data* restores; rebuilding the *box* also needs the files
+that are deliberately not in git — the inventory, `.env` files and backup
+credentials (including the restic repository password, without which the
+backups are undecryptable). Bundle them, encrypted, and store the result
+somewhere that survives your laptop:
+
+```bash
+bash scripts/make-recovery-bundle.sh
+```
+
+Re-run it after rotating any credential. The full "box is gone" rebuild drill
+— worth walking once on a throwaway VPS and timing — is documented in
+`scaffold/docs/09-recovery.md`.
 
 ### Cloud-side security review (Prowler)
 

@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+COMPOSE_PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$ROOT_DIR")}"
 TEST_APP_DIR="apps/ci-smoke"
 CI_OVERRIDE_FILE="docker-compose.ci.override.yml"
 BASE_COMPOSE=(docker compose -f docker-compose.yml -f "$CI_OVERRIDE_FILE")
@@ -11,6 +12,9 @@ BASE_COMPOSE=(docker compose -f docker-compose.yml -f "$CI_OVERRIDE_FILE")
 cleanup() {
   "${BASE_COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
   rm -rf "$TEST_APP_DIR"
+  # Re-render the committed bundle without the test app, restoring it to match
+  # the repo's real sources.
+  bash scaffold/docker/render-caddy-routes.sh >/dev/null 2>&1 || true
   rm -f .env docker-compose.override.yml "$CI_OVERRIDE_FILE"
 }
 
@@ -125,6 +129,8 @@ ci.{$DOMAIN} {
 }
 EOF
 
+bash scaffold/docker/render-caddy-routes.sh
+
 echo "Validating standard compose config"
 "${BASE_COMPOSE[@]}" config >/dev/null
 
@@ -133,6 +139,7 @@ echo "Starting caddy with production config"
 wait_for_caddy
 wait_for_caddy_healthy
 "${BASE_COMPOSE[@]}" exec -T caddy grep -F 'encode zstd gzip' /tmp/Caddyfile >/dev/null
+# shellcheck disable=SC2016  # literal Caddy placeholder, not a shell variable
 "${BASE_COMPOSE[@]}" exec -T caddy grep -F 'ci.{$DOMAIN}' /tmp/Caddyfile >/dev/null
 assert_http_redirect "ci.example.com"
 
@@ -149,4 +156,4 @@ wait_for_caddy_healthy
 assert_https_body "ci.example.com"
 
 echo "Verifying CIS Docker section 5 runtime controls on the running stack"
-python3 scaffold/ansible/files/compose-audit/check-compose-hardening.py
+python3 scaffold/ansible/files/compose-audit/check-compose-hardening.py --compose-project "$COMPOSE_PROJECT"

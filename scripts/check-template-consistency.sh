@@ -29,6 +29,8 @@ require_not_contains() {
 }
 
 require_file "docker-compose.yml"
+require_file ".generated/caddy/apps.caddy"
+require_file ".generated/caddy/networks.yml"
 require_file ".env.example"
 require_file "Caddyfile"
 require_file "Caddyfile.local"
@@ -39,6 +41,7 @@ require_file "apps/auth/auth.caddy"
 require_file "apps/auth/.env.example"
 
 require_contains "docker-compose.yml" "  - scaffold/docker/caddy.base.yml"
+require_contains "docker-compose.yml" "  - .generated/caddy/networks.yml"
 require_contains "docker-compose.yml" "  # - apps/auth/docker-compose.yml"
 require_contains ".env.example" "DOMAIN=myserver.example.com"
 require_contains "Caddyfile.local" "    local_certs"
@@ -47,6 +50,9 @@ require_contains "scripts/post-provision-smoke-test.sh" "check_remote \"deploy h
 
 require_not_contains "Caddyfile" "import /srv/repo/apps/*/*.caddy"
 require_not_contains "Caddyfile.local" "import /srv/repo/apps/*/*.caddy"
+
+# The committed bundle must match its sources (apps/, include list).
+bash scripts/check-generated-sync.sh
 
 # Repo tooling must at least parse — cheap insurance for the setup helpers.
 for f in scripts/*.sh; do

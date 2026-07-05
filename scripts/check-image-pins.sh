@@ -33,10 +33,19 @@ for f in "${compose_files[@]}"; do
   done < <(grep -E '^\s*image:' "$f" | grep -v '#' | grep -v '@sha256:' || true)
 done
 
+for f in apps/*/deploy.sh; do
+  [[ -f "$f" ]] || continue
+  while IFS= read -r line; do
+    echo "ERROR: unpinned helper image in $f: ${line#"${line%%[![:space:]]*}"}" >&2
+    fail=1
+  done < <(grep -nE '\bdocker[[:space:]]+(run|pull)\b' "$f" | grep -v '@sha256:' || true)
+done
+
 if [[ $fail -ne 0 ]]; then
   echo "" >&2
   echo "Pin images as repo:tag@sha256:<digest> (docker buildx imagetools inspect <image>" >&2
-  echo "prints the digest; Renovate pinDigests maintains it afterwards)." >&2
+  echo "prints the digest; Renovate pinDigests maintains compose pins afterwards)." >&2
+  echo "Avoid ad-hoc helper containers in deploy hooks; prefer declared compose services." >&2
   exit 1
 fi
 
