@@ -40,12 +40,13 @@
       "automerge": true
     },
     {
-      "description": "Our own first-party images update immediately — the 3-day cooldown is for third-party upstreams we don't control, not our own apps",
+      "description": "Our own first-party images update immediately — the 3-day cooldown is for third-party upstreams we don't control, not our own apps. Covers anything under our GHCR namespace plus named first-party apps hosted elsewhere.",
       "matchDatasources": [
         "docker"
       ],
       "matchPackageNames": [
-        "ghcr.io/uppertoe/**"
+        "ghcr.io/uppertoe/**",
+        "**/anaes-data-lab"
       ],
       "matchUpdateTypes": [
         "digest",
