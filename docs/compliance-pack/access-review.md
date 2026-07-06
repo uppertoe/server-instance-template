@@ -22,10 +22,13 @@ current after any rotation.
 - **Credentials:** backup S3 (write-scoped to `backups/` prefix), log-export
   S3 (write-only IAM), ntfy token — all single-purpose, in the gitignored
   inventory. No unused credentials identified.
-- **GitHub:** single owner; no collaborators; CODEOWNERS present.
-  *Branch protection + require-code-owner-review not yet enabled — carried
-  as an action item.*
-- **Recovery bundle:** to be generated on first real credential set (staging
-  bundle pending) — carried as an action item.
+- **GitHub:** single owner; no collaborators; CODEOWNERS present; 2FA enforced.
+  Branch protection **enabled** (required checks, force-push/deletion blocked,
+  enforce-admins on). `require-code-owner-review` deferred until a second
+  reviewer exists — a solo maintainer cannot self-approve, so enabling it would
+  deadlock merges; the `deploy_verify_signature` gate is the technical backstop.
+- **Recovery bundle:** generated 2026-07-06; the full wipe+rebuild drill
+  confirmed it restores (RTO ~63 min, logged in scaffold/docs/09). Refresh on
+  every credential rotation.
 
 Reviewed by: repo owner.

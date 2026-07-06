@@ -10,8 +10,8 @@ current — it is the first artifact a privacy review requests.
 | Component | Provider | Provider ownership/HQ | Region/location | Notes |
 |---|---|---|---|---|
 | VPS | RackNerd | US-owned | United States | budget VPS; no IRAP/HCF assessment |
-| Backups (restic) | AWS S3 | US-owned | ⟨bucket region — record per instance⟩ | client-side encrypted (restic AES-256) before upload; Object Lock on |
-| Log export | AWS S3 (Object-Locked bucket) | US-owned | ⟨bucket region⟩ | write-only IAM user; journald/audit/access logs |
+| Backups (restic) | AWS S3 | US-owned | ap-southeast-2 (Sydney, AU) | client-side encrypted (restic AES-256) before upload; versioned (NOT Object-Locked — see control-matrix row 16) |
+| Log export | AWS S3 (Object-Locked bucket) | US-owned | ap-southeast-2 (Sydney, AU) | write-only IAM user; journald/audit/access logs |
 | Transactional email | ⟨SMTP relay — fill when auth enabled⟩ | — | — | OTP emails contain addresses, no clinical data |
 | External monitor | self-hosted status service (operator-controlled) | — | ⟨region⟩ | receives heartbeats only, no payload data |
 | DNS / registrar | ⟨registrar⟩ | — | — | metadata only |
