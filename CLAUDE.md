@@ -26,7 +26,7 @@ handful of web-app containers.
   drift. Never edit these files by hand.
 - **`Caddyfile`** is intentionally near-empty — routes live in the app snippets
   and the rendered bundle. Don't add routes here.
-- **The detailed docs live in `scaffold/docs/01`–`11`.** Prefer pointing the user
+- **The detailed docs live in `scaffold/docs/01`–`12`.** Prefer pointing the user
   there over re-explaining. Most relevant: `04-server-repo.md` (adding apps),
   `06-auditing.md` (audits), `07-auth.md` (login wall), `08-security-model.md`
   (which benchmark governs each layer + the accepted-exceptions register),
