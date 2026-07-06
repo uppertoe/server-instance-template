@@ -17,7 +17,7 @@
 apps/*/deploy.sh   @uppertoe
 
 # Renovate config controls what may automerge at all.
-renovate.json      @uppertoe
+renovate.json5     @uppertoe
 
 # CODEOWNERS itself.
 /.github/CODEOWNERS @uppertoe

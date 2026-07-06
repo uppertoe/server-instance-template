@@ -343,7 +343,7 @@ each pin to the registry's current digest and opens an issue on drift
 (`bash scripts/check-digest-freshness.sh` runs the same check locally), and —
 recommended — enable the **Mend Renovate GitHub App** on this repo and the
 scaffold so drift arrives as automated bump PRs instead (the committed
-`renovate.json` is already configured for digest pinning).
+`renovate.json5` is already configured for digest pinning).
 
 ### Secret recovery (env files)
 

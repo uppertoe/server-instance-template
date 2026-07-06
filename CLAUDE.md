@@ -79,7 +79,9 @@ Inventory lives in `ansible/hosts` (gitignored; copy `ansible/hosts.example`).
 - **Every image is pinned by digest** (`image: repo:tag@sha256:…`) — including the
   bundled `apps/auth` and `apps/ntfy`. CI's `image-pins` job
   (`scripts/check-image-pins.sh`) fails on any unpinned image; Renovate
-  (`renovate.json`, `pinDigests`) keeps the digests current via PR.
+  (`renovate.json5`, `pinDigests`) keeps the digests current via PR. Your own
+  images skip the 3-day third-party cooldown — add each to the FIRST-PARTY list
+  in `renovate.json5` when you deploy a new app of your own.
 - **`.caddy` snippets: never put `{` or `}` in a comment** — the route renderer
   counts braces when assembling the Caddyfile bundle and unbalanced ones corrupt it.
 - **Protect an app/path with auth:** the guard snippets take the upstream as an
