@@ -1,0 +1,81 @@
+{
+  // Renovate config. JSON5 (comments allowed) — see the FIRST-PARTY list below,
+  // which is the one part you edit as you add your own apps.
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "labels": ["dependencies"],
+  "docker": {
+    "pinDigests": true,
+  },
+  "packageRules": [
+    // ── THIRD-PARTY images ──────────────────────────────────────────────
+    // Pin + group digest bumps, and hold them for a 3-day cooldown before
+    // automerge. The cooldown lets upstreams we don't control settle (e.g. yank
+    // a bad tag) before we pull it. It does NOT apply to our own apps — see the
+    // FIRST-PARTY rule further down, which overrides this for matching images.
+    {
+      "description": "Regex-managed digest pins ride the same automerge+cooldown as compose pins",
+      "matchManagers": ["custom.regex"],
+      "matchUpdateTypes": ["digest", "pin", "pinDigest"],
+      "groupName": "docker image digests",
+      "minimumReleaseAge": "3 days",
+      "automerge": true,
+    },
+    {
+      "description": "Group Docker image digest bumps so base-image CVE fixes flow through in one PR",
+      "matchManagers": ["docker-compose", "dockerfile"],
+      "matchUpdateTypes": ["digest", "pin", "pinDigest"],
+      "groupName": "docker image digests",
+      "minimumReleaseAge": "3 days",
+      "automerge": true,
+    },
+
+    // ── FIRST-PARTY apps — no cooldown ──────────────────────────────────
+    // Our own images are already gated by their own repo CI before they publish,
+    // so there's nothing to "let settle": update immediately. A match here wins
+    // over the 3-day rules above (later rules override earlier ones).
+    //
+    //   >>> EDIT THIS LIST when you deploy a new app of your own <<<
+    //   Each entry is a Renovate package-name glob:
+    //     "ghcr.io/<you>/**"  — a whole registry namespace (covers everything under it)
+    //     "**/<app-name>"     — one named app, wherever it's hosted
+    //     "<exact/name>"      — a single exact image name
+    {
+      "description": "First-party app images update immediately (skip the third-party cooldown)",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "ghcr.io/uppertoe/**", // our GHCR namespace — covers vps-scaffold-auth, etc.
+        "**/anaes-data-lab", // named first-party app, if ever hosted outside the namespace
+      ],
+      "matchUpdateTypes": ["digest", "pin", "pinDigest"],
+      "minimumReleaseAge": "0 days",
+      "automerge": true,
+    },
+
+    {
+      "description": "Scaffold submodule bumps: automerge once repo CI proves the merged stack boots",
+      "matchManagers": ["git-submodules"],
+      "automerge": true,
+    },
+    {
+      "description": "Automerge action pin/digest updates; version bumps stay manual",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["digest", "pin", "pinDigest"],
+      "automerge": true,
+    },
+  ],
+  "git-submodules": {
+    "enabled": true,
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Digest-pinned scanner images in workflow docker-run lines",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      "matchStrings": [
+        "(?<depName>[a-z0-9][a-z0-9._/-]*?):(?<currentValue>[a-zA-Z0-9][a-zA-Z0-9._-]*)@(?<currentDigest>sha256:[a-f0-9]{64})",
+      ],
+      "datasourceTemplate": "docker",
+    },
+  ],
+}
