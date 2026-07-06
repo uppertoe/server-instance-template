@@ -30,7 +30,7 @@ playbooks) or `CI`.
 | 17 | Encryption at rest (swap ✅; data volumes/disk pending) | 4.1 | crypto ch. | — | E11.140 | encrypted swap (random key per boot) | `lsblk`/crypttab capture | ⚠️ B1.2–3 — next provision; **mandatory before health data** |
 | 18 | Host-down alerting (external dead-man's switch) | — | — | — | Std 7 | `vps-deadman.timer` — **required by provisioning** (explicit opt-out only) | monitor history; notify-role gate | ✅ |
 | 19 | Web/DB tier separation; **per-app proxy-network exclusivity** | 4.1 | 1269–1271 | — | E11.130 | generated per-app networks + compose-audit gates | `reports/compose-audit-*` (`proxy_network_exclusive`, db controls) | ✅ (A8 label-based DB detection pending) |
-| 20 | Whole-of-box recovery: encrypted offsite secret bundle + rebuild drill + RTO log | 4.1 | — | — | Std 7 | `make-recovery-bundle.sh` + scaffold docs/09 | bundle exists offsite; RTO log entries | ⚠️ first drill pending |
+| 20 | Whole-of-box recovery: encrypted offsite secret bundle + rebuild drill + RTO log | 4.1 | — | — | Std 7 | `make-recovery-bundle.sh` + scaffold docs/09 | bundle generated 2026-07-06; full wipe+rebuild drill PASS, RTO ~63 min in docs/09 RTO log | ✅ |
 | 21 | Asset register with BILs | — | — | — | Std 2 | [information-asset-register.md](information-asset-register.md) | the register | ✅ (this pack) |
 | 22 | Hosting jurisdiction documented with HPP 9 ground | 9 | — | — | Std 8 | [hosting-jurisdiction-record.md](hosting-jurisdiction-record.md) | the record | ✅ (n/a ground; migration tripwire recorded) |
 | 23 | Retention/deletion honours 7-year/age-25 + deletion logs | 4.2–4.4 | — | — | — | [retention-deletion-design.md](retention-deletion-design.md) | app deletion logs (n/a — no health records) | ✅ (stance documented) |
@@ -38,7 +38,7 @@ playbooks) or `CI`.
 | 25 | Quarterly access review | 4.1 | — | restrict admin | E11.120 / Std 4 | [access-review.md](access-review.md), prompted by maintenance-day issue | dated entries | ✅ (log started) |
 | 26 | Secrets handling: 0600 files, AIDE-monitored, encrypted offsite copies, documented rotation | 4.1 | 1449 analog | — | E11.150 | `.env` pattern + recovery bundle + env-files restic | recovery-bundle generated 2026-07-06; `restic snapshots --tag env-files-files` | ✅ |
 | 27 | EDR or documented compensating controls | — | — | — | — | auditd+AIDE+real-time ntfy+Trivy+watchers stack | this matrix + audit bundle; written acceptance only if operated for a health service | ➖ C2 — health-service context only |
-| 28 | Supply-chain: SHA-pinned actions, CodeQL, Scorecard, branch protection + CODEOWNERS | — | 1409 supply | — | Std 8 | `.github/` workflows + CODEOWNERS | Scorecard report; CI runs | ⚠️ enable branch protection + code-owner review in GitHub settings |
+| 28 | Supply-chain: SHA-pinned actions, CodeQL, Scorecard, gitleaks, branch protection | — | 1409 supply | — | Std 8 | `.github/` workflows + CODEOWNERS + gitleaks secret-scan | Scorecard report; CI runs; branch-protection API capture | ✅ (branch protection on: required checks, force-push/deletion blocked, enforce-admins; `require-code-owner-review` deferred — solo maintainer can't self-approve) |
 
 **Version note (2026-07-05):** measurement of record is CIS Ubuntu 24.04
 **v1.0.0** (SSG profiles) and CIS Docker **v1.6.0** (docker-bench) — version
