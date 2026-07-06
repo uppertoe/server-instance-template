@@ -28,7 +28,8 @@ only its own, so apps cannot reach each other or forge the `Remote-*`
 identity headers; the runtime audit fails if two apps ever share a
 Caddy-reachable network · container egress restricted to the host's outbound
 port allowlist (DOCKER-USER chain) · restic client-side-encrypted backups to
-S3 (Object Lock) · journald/audit/access logs exported to a write-only
+S3 (versioned, **not** Object-Locked — restic prune needs delete rights; see
+control-matrix row 16) · journald/audit/access logs exported to a write-only
 Object-Locked S3 bucket (≥12 months) · ntfy alerting with an **external
 dead-man's-switch monitor (required by provisioning)**, disk/container-health
 watchers, post-reboot health reports, a monthly alert self-test, and a weekly
@@ -73,14 +74,18 @@ deadline.
 Model: `scaffold/docs/05-access-model.md` — **restricted mode on**: `deploy`
 is wrapper-only sudo with no docker group; `admin` is break-glass. The
 repo-to-root boundary (merge rights = root via the deploy path) is documented
-there and guarded by CODEOWNERS + a 3-day automerge cooldown.
+there. It is currently guarded by the 3-day automerge cooldown + required CI
+checks; `require-code-owner-review` is **not** enabled (a solo maintainer
+cannot self-approve, which would deadlock merges), so CODEOWNERS is advisory
+until a second reviewer exists. The optional `deploy_verify_signature` gate
+(refuse an unsigned HEAD at deploy) is the technical backstop for this boundary.
 
 | Access | Who | Factor(s) | Reviewed |
 |---|---|---|---|
 | SSH (`deploy`, `admin`) | operator (sole) | ed25519 key, passphrase-protected | 2026-07-05 |
 | App admin (auth tier) | — (disabled) | email OTP (+ TOTP at commissioning) | 2026-07-05 |
 | Backup / log-export S3 | on-host root config | prefix-scoped / write-only IAM | 2026-07-05 |
-| GitHub (merge = root boundary) | operator (sole) | ⟨MFA type — verify 2FA + branch protection⟩ | 2026-07-05 |
+| GitHub (merge = root boundary) | operator (sole) | 2FA (TOTP) enforced; branch protection on (force-push/deletion blocked, required checks); require-code-owner-review pending a second reviewer | 2026-07-05 |
 
 Secrets: gitignored `.env`/inventory files at mode 600, AIDE-monitored,
 encrypted offsite copy via `scripts/make-recovery-bundle.sh`, rotation on
