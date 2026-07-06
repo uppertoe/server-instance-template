@@ -40,6 +40,22 @@
       "automerge": true
     },
     {
+      "description": "Our own first-party images update immediately — the 3-day cooldown is for third-party upstreams we don't control, not our own apps",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/uppertoe/**"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "minimumReleaseAge": "0 days",
+      "automerge": true
+    },
+    {
       "description": "Scaffold submodule bumps: automerge once repo CI proves the merged stack boots",
       "matchManagers": [
         "git-submodules"
