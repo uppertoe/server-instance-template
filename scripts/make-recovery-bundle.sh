@@ -19,7 +19,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-out_dir="${1:-.}"
+# Default OUTSIDE the worktree — a bundle written into the repo is one
+# `git add -f` from a catastrophic leak. Pass an explicit dir to override.
+out_dir="${1:-$HOME}"
 stamp="$(date +%Y%m%d)"
 host="$(grep -Eom1 '^[a-zA-Z0-9._-]+' ansible/hosts 2>/dev/null || echo vps)"
 bundle="$out_dir/recovery-bundle-${host}-${stamp}.tar.gz.enc"
@@ -28,10 +30,13 @@ bundle="$out_dir/recovery-bundle-${host}-${stamp}.tar.gz.enc"
 candidates=(
   ansible/hosts
   .env
+  docker-compose.override.yml
   backup/config.env
 )
+# apps/**/.env (nested) + backup service envs — match what .gitignore hides so
+# a secret the gitignore protects can never be missed by the bundle.
 while IFS= read -r f; do candidates+=("$f"); done \
-  < <(ls apps/*/.env backup/services/*.env 2>/dev/null || true)
+  < <(find apps -type f -name '.env' 2>/dev/null; ls backup/services/*.env 2>/dev/null || true)
 
 files=()
 for f in "${candidates[@]}"; do
