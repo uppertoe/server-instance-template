@@ -3,17 +3,19 @@
 # it: the auth service rate-limits per client IP, and Caddy otherwise preserves
 # any inbound X-Forwarded-For (appending the real peer), which a leftmost reader
 # would trust. Caddy faces clients directly here, so the remote host is the client.
-# Access logging is on (JSON to stdout) so the login flow can be audited -- in
-# particular whether GET /login carried an rd query and where the post-login 302
-# pointed. Caddy logs the request URI (incl. the rd query) and redirect Location
-# but redacts the Cookie header and does not log POST bodies, so no OTP or email
-# address is recorded. Without this, the auth vhost was unlogged and a "landed on
-# /welcome instead of the app" report left no trace to diagnose.
+# Access logging for this vhost (and every other site) is added automatically by
+# the scaffold's render step -- JSON to a rolled file on the caddy_logs volume,
+# so the login flow stays auditable across container recreates (in particular
+# whether GET /login carried an rd query and where the post-login 302 pointed).
+# Caddy logs the request URI and redirect Location but redacts the Cookie header
+# and never logs POST bodies, so no OTP code or email address reaches disk.
 auth.{$DOMAIN} {
-	log {
-		output stdout
-		format json
-	}
+	# The break-glass token rides in the URL path (/break/<token>). Keep those
+	# requests out of the access log so the live bearer credential is never
+	# written to disk / shipped off-host. (Browser history still holds it -- that
+	# is inherent to a scannable card; this closes the server-side log exposure.)
+	@breakglass path /break /break/*
+	log_skip @breakglass
 
 	reverse_proxy auth:8080 {
 		header_up X-Forwarded-For {http.request.remote.host}
@@ -26,114 +28,215 @@ auth.{$DOMAIN} {
 # strip_auth_cookie), so an app needs no separate reverse_proxy line. On an
 # unauthenticated request /verify returns a 302 to the login page; on a valid
 # session it returns 200 and Caddy forwards Remote-User / Remote-Email /
-# Remote-Groups upstream (stripping any client-supplied copies first). A user
-# who is signed in but not allowed on THIS app is sent to a friendly
-# "no access" page with a sign-in link -- never bounced back to login.
+# Remote-Groups upstream. Each guard deletes any client-supplied Remote-* up front
+# (import strip_client_identity) and forward_auth's copy_headers re-adds the
+# authoritative values from the auth response, so the app can never see a spoofed
+# identity header. A user who is signed in but not allowed on THIS app is sent to
+# a friendly "no access" page with a sign-in link -- never bounced back to login.
 #
-# NOTE: keep comments in .caddy files free of braces -- the scaffold's route
-# renderer counts braces when assembling the Caddyfile bundle.
+# NOTE: keep comments in .caddy files free of braces -- the scaffold's
+# run-caddy.sh counts braces when assembling the Caddyfile.
 #
 # Usage (domains and groups are space/comma-separated; UPSTREAM is host:port):
 #   import protected UPSTREAM                       -- any signed-in user; NOT break-glass
 #   import protected_domains "example.org" UPSTREAM  -- signed-in user at a listed email domain.
 #                                                      The login page hints the domain and a
 #                                                      wrong-domain address is declined early.
-#   import protected_groups  "oncall" UPSTREAM   -- members of a listed group, OR a
+#   import protected_groups  "bg_stroke" UPSTREAM   -- members of a listed group, OR a
 #                                                      break-glass card targeting that group
 #   import protected_admin UPSTREAM                 -- admins only; for a separate admin door
-#   import protected_access  "example.org" "guests" UPSTREAM
+#   import protected_access  "example.org" "dash_guests" UPSTREAM
 #                                                   -- in a listed domain OR a listed group
 # e.g.  import protected dashboard:3000
 #
+# For a per-route entrance, put the import inside a handle block (the upstream
+# argument still rides on the import), e.g. an /admin door plus a domain gate on
+# the same host -- see the worked example in deploy/standalone/Caddyfile.
+#
+# Any route that declares a domain (protected_domains, or the domain side of
+# protected_access) gives the login hint + early decline by that domain. A
+# group-only route (protected_groups, protected_admin) declares no domain, so it
+# neither hints nor declines -- that is the door for people who can't match the
+# domain. The domain door declines off-domain users (admins included), so give
+# admins their own route via  import protected_admin  rather than the main gate.
+# Admins whose email matches the app's domain need nothing extra; they pass it.
+#
+# Break-glass QR sessions are deny-by-default: they reach ONLY apps/routes whose
+# group list names the card's target group, so an emergency card is scoped to
+# its location. `import protected` deliberately excludes them.
+#
 # Each guard declares its requirement in ONE header, X-Auth-Policy, set with
 # header_up. Because header_up REPLACES the header, a client can't inject or
-# widen it. X-Auth-Policy grammar: ";"-separated key=value fields; "domains" and
-# "groups" each hold a space/comma-separated allow-list; a bare "any" is the
-# plain-protected sentinel. The hint label and alt-login link are UX only.
+# widen it -- whatever it sends is overwritten. There is no per-guard "delete the
+# rest" list to keep in sync: new policy fields go inside X-Auth-Policy, so a
+# forgotten strip can't silently widen access. Always use these snippets rather
+# than hand-rolling forward_auth; a custom guard that omits X-Auth-Policy is
+# treated as a plain `protected` (any signed-in user), and the auth service logs
+# a warning if it still sends the old X-Auth-Require-* headers.
+#
+# X-Auth-Policy grammar: ";"-separated key=value fields. "domains" and "groups"
+# each hold a space/comma-separated allow-list; a bare "any" (no fields) is the
+# plain-protected sentinel. The hint label and alt-login link are UX only (the
+# alt URL is re-validated server-side to be within the domain), so they ride in
+# their own plain headers.
 
 (protected) {
-	forward_auth auth:8080 {
-		uri /verify
-		copy_headers Remote-User Remote-Email Remote-Groups
-		header_up X-Auth-Policy "any"
-	}
-	reverse_proxy {args[0]} {
-		import strip_auth_cookie
+	route {
+		import strip_client_identity
+		forward_auth auth:8080 {
+			uri /verify
+			copy_headers Remote-User Remote-Email Remote-Groups
+			header_up X-Auth-Policy "any"
+		}
+		reverse_proxy {args[0]} {
+			import strip_auth_cookie
+		}
 	}
 }
 
 (protected_domains) {
-	forward_auth auth:8080 {
-		uri /verify
-		copy_headers Remote-User Remote-Email Remote-Groups
-		header_up X-Auth-Policy "domains={args[0]}"
-	}
-	reverse_proxy {args[1]} {
-		import strip_auth_cookie
+	route {
+		import strip_client_identity
+		forward_auth auth:8080 {
+			uri /verify
+			copy_headers Remote-User Remote-Email Remote-Groups
+			header_up X-Auth-Policy "domains={args[0]}"
+		}
+		reverse_proxy {args[1]} {
+			import strip_auth_cookie
+		}
 	}
 }
 
 # Like protected_domains, but shows a friendly label instead of enumerating the
-# domains. Args: domains, label, upstream. The label slots into "This page is
-# for <label> email addresses". The full domain list still governs the decline.
+# domains (handy when the list is long). Args: domains, label, upstream. The
+# label slots into "This page is for <label> email addresses", e.g.
+#   import protected_domains_labeled "example.org partner-a.org partner-b.org" "an approved partner organisation" clinical:3000
+# The full domain list still governs the actual hint/decline; the label is
+# display only.
 (protected_domains_labeled) {
-	forward_auth auth:8080 {
-		uri /verify
-		copy_headers Remote-User Remote-Email Remote-Groups
-		header_up X-Auth-Policy "domains={args[0]}"
-		header_up X-Auth-Domain-Label "{args[1]}"
-	}
-	reverse_proxy {args[2]} {
-		import strip_auth_cookie
+	route {
+		import strip_client_identity
+		forward_auth auth:8080 {
+			uri /verify
+			copy_headers Remote-User Remote-Email Remote-Groups
+			header_up X-Auth-Policy "domains={args[0]}"
+			header_up X-Auth-Domain-Label "{args[1]}"
+		}
+		reverse_proxy {args[2]} {
+			import strip_auth_cookie
+		}
 	}
 }
 
-# Like protected_domains, but also offers a "sign in another way" link for users
-# who can't match the domain. Args: domains, alt-login URL, link label, upstream.
+# Like protected_domains, but also offers a small "sign in another way" link on
+# the login/decline page for users who can't match the domain (e.g. admins sent
+# to a separate door). Args: domains, alt-login URL (absolute https within the
+# server domain), link label, upstream. The URL is re-validated server-side
+# before it is shown.
 (protected_domains_alt) {
-	forward_auth auth:8080 {
-		uri /verify
-		copy_headers Remote-User Remote-Email Remote-Groups
-		header_up X-Auth-Policy "domains={args[0]}"
-		header_up X-Auth-Alt-Login "{args[1]}"
-		header_up X-Auth-Alt-Label "{args[2]}"
-	}
-	reverse_proxy {args[3]} {
-		import strip_auth_cookie
+	route {
+		import strip_client_identity
+		forward_auth auth:8080 {
+			uri /verify
+			copy_headers Remote-User Remote-Email Remote-Groups
+			header_up X-Auth-Policy "domains={args[0]}"
+			header_up X-Auth-Alt-Login "{args[1]}"
+			header_up X-Auth-Alt-Label "{args[2]}"
+		}
+		reverse_proxy {args[3]} {
+			import strip_auth_cookie
+		}
 	}
 }
 
 (protected_groups) {
-	forward_auth auth:8080 {
-		uri /verify
-		copy_headers Remote-User Remote-Email Remote-Groups
-		header_up X-Auth-Policy "groups={args[0]}"
-	}
-	reverse_proxy {args[1]} {
-		import strip_auth_cookie
+	route {
+		import strip_client_identity
+		forward_auth auth:8080 {
+			uri /verify
+			copy_headers Remote-User Remote-Email Remote-Groups
+			header_up X-Auth-Policy "groups={args[0]}"
+		}
+		reverse_proxy {args[1]} {
+			import strip_auth_cookie
+		}
 	}
 }
 
-# Admin door: admins only, no login hint or early decline.
+# Admin door: admins only, no login hint or early decline. Use on a separate
+# route/host so the app's main door can stay a pure domain gate.
 (protected_admin) {
-	forward_auth auth:8080 {
-		uri /verify
-		copy_headers Remote-User Remote-Email Remote-Groups
-		header_up X-Auth-Policy "groups=admin"
-	}
-	reverse_proxy {args[0]} {
-		import strip_auth_cookie
+	route {
+		import strip_client_identity
+		forward_auth auth:8080 {
+			uri /verify
+			copy_headers Remote-User Remote-Email Remote-Groups
+			header_up X-Auth-Policy "groups=admin"
+		}
+		reverse_proxy {args[0]} {
+			import strip_auth_cookie
+		}
 	}
 }
 
 (protected_access) {
-	forward_auth auth:8080 {
-		uri /verify
-		copy_headers Remote-User Remote-Email Remote-Groups
-		header_up X-Auth-Policy "domains={args[0]};groups={args[1]}"
+	route {
+		import strip_client_identity
+		forward_auth auth:8080 {
+			uri /verify
+			copy_headers Remote-User Remote-Email Remote-Groups
+			header_up X-Auth-Policy "domains={args[0]};groups={args[1]}"
+		}
+		reverse_proxy {args[2]} {
+			import strip_auth_cookie
+		}
 	}
-	reverse_proxy {args[2]} {
-		import strip_auth_cookie
+}
+
+# Gate NON-PROXIED content (e.g. a static file_server site) behind the login
+# wall. Args: domains. Import it at the top of the site block, then write the
+# block's own root/file_server as usual -- in Caddy's default directive order
+# file_server runs near-last, safely after this gate's route. Do NOT pair it
+# with a top-level redir, which orders BEFORE the gate (use
+# protected_domains_redir below for that).
+#   import protected_domains_gate "example.org"
+# Gated static responses default to Cache-Control "private, no-cache"
+# (?-prefixed, so a site block can override): the auth wall gates the fetch,
+# not the copy -- without this, a browser on a shared workstation can serve
+# gated pages from its cache after logout. no-cache forces revalidation,
+# which re-enters this gate; private keeps shared caches out. Efficient 304s
+# still work.
+(protected_domains_gate) {
+	route {
+		import strip_client_identity
+		forward_auth auth:8080 {
+			uri /verify
+			copy_headers Remote-User Remote-Email Remote-Groups
+			header_up X-Auth-Policy "domains={args[0]}"
+		}
+		header ?Cache-Control "private, no-cache"
+	}
+}
+
+# Gate a REDIRECT (no upstream) behind the login wall -- for vanity names that
+# bounce to an external site which has no auth of its own. Args: domains,
+# target URL (may carry a trailing uri placeholder to preserve the path).
+#   import protected_domains_redir "example.org" "https://example.org"
+# The route wrapper is load-bearing: in Caddy's default directive order a bare
+# redir runs BEFORE forward_auth, which would skip the gate entirely. The
+# redirect is deliberately 302 -- browsers cache a 301 and would bypass the
+# gate on every later visit. copy_headers keeps Remote-User in the request so
+# the access log still attributes the hit to the signed-in user.
+(protected_domains_redir) {
+	route {
+		import strip_client_identity
+		forward_auth auth:8080 {
+			uri /verify
+			copy_headers Remote-User Remote-Email Remote-Groups
+			header_up X-Auth-Policy "domains={args[0]}"
+		}
+		redir {args[1]}
 	}
 }
 
@@ -141,8 +244,28 @@ auth.{$DOMAIN} {
 # session cookie is scoped to .<domain>, so the browser sends it to every
 # subdomain, and forward_auth proxies the original request (cookies included)
 # upstream. Without this strip, every protected app backend would receive a live,
-# estate-wide bearer credential it doesn't need. Apps must take identity ONLY
-# from the Remote-* headers. Removes only vps_auth_session, leaving app cookies.
+# estate-wide bearer credential it doesn't need, and a single compromised or
+# malicious app could replay it against every other app as that user (there is no
+# per-session revocation to stop it). Apps must take identity ONLY from the
+# Remote-* headers -- which forward_auth sets and Caddy strips from client input
+# -- never from the cookie. The guards above import this automatically; it is
+# also exposed for a hand-rolled reverse_proxy. It removes only vps_auth_session,
+# leaving the app's own cookies intact.
 (strip_auth_cookie) {
 	header_up Cookie "(^|;\s*)vps_auth_session=[^;]*" ""
+}
+
+# Delete any client-supplied identity headers from the request BEFORE forward_auth
+# runs, so its copy_headers can re-add the authoritative values on a 2xx. The apps
+# trust Remote-* because only Caddy sets them; this makes that guarantee explicit
+# rather than relying solely on copy_headers' overwrite-on-2xx (which leaves a
+# theoretical gap on non-2xx and is easy to misread). It MUST be imported inside a
+# route block (as the guards above do) so it runs before forward_auth: Caddy's default
+# directive order otherwise places a bare request_header AFTER forward_auth, which
+# would delete the authoritative value instead. Verified against Caddy 2 with a
+# live forward_auth + whoami harness.
+(strip_client_identity) {
+	request_header -Remote-User
+	request_header -Remote-Email
+	request_header -Remote-Groups
 }
