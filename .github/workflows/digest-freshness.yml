@@ -45,5 +45,9 @@ jobs:
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
           else
+            # gh refuses unknown labels, which would swallow the alert on a
+            # fresh repo — ensure the label exists first (idempotent).
+            gh label create security --color B60205 \
+              --description "Automated security/drift alerts" --force || true
             gh issue create --title "$title" --body "$body" --label security
           fi
