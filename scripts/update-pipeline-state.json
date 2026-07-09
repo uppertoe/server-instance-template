@@ -13,6 +13,12 @@
     " - For PRIVATE images: Mend org secret (plain secret, NOT 'Env var')",
     "   holding a read:packages classic PAT, referenced by the hostRules",
     "   block in renovate.json5.",
+    " - For PRIVATE fleet repos: server-repo Actions secrets",
+    "   FLEET_READ_TOKEN_<OWNER> (read-only fine-grained PATs, one per owner",
+    "   — a fine-grained PAT is bound to a single resource owner) so the",
+    "   weekly check can verify them. Provision/rotate via",
+    "   scripts/fleet-token-setup.sh; add the matching env lines to",
+    "   .github/workflows/update-pipeline-freshness.yml.",
     " - Each app repo: publish workflow gated on tests AND a boot smoke",
     "   (build with load:true, docker run, curl /healthz, only then push),",
     "   plus a weekly schedule: cron so base-image fixes rebuild without a",
@@ -20,7 +26,6 @@
     "   days of repo inactivity \u2014 this weekly check catches that)."
   ],
   "server_repo": "<owner>/<this-server-repo>",
-  "renovate_bot_pattern": "renovate|mend",
   "max_days_since_renovate_activity": 14,
   "app_repos": [
     {

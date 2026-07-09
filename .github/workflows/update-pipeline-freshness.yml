@@ -8,9 +8,10 @@ name: Update Pipeline Freshness
 # mode, and the registry-secret hostRule being dropped. Raises/updates an
 # issue on drift, like digest-freshness.
 #
-# GITHUB_TOKEN can't read the private fleet repos (reported as SKIP);
-# add a FLEET_READ_TOKEN repo secret (read-only fine-grained PAT across the
-# fleet) to make this authoritative.
+# GITHUB_TOKEN can't read the private fleet repos (reported as SKIP); the
+# FLEET_READ_TOKEN_* secrets (read-only fine-grained PATs, one per repo
+# owner — a fine-grained PAT is bound to a single resource owner) make it
+# authoritative. Provision them with scripts/fleet-token-setup.sh.
 
 on:
   schedule:
@@ -31,7 +32,14 @@ jobs:
 
       - name: Check pipeline freshness
         env:
-          GH_TOKEN: ${{ secrets.FLEET_READ_TOKEN || github.token }}
+          # Ambient auth: reads this repo + public fleet repos.
+          GH_TOKEN: ${{ github.token }}
+          # Per-owner read-only PATs for the private fleet repos (see header;
+          # unset secrets resolve to empty and the script falls back).
+          # >>> EDIT: one line per owner of a private fleet repo, uppercased
+          # with '-' -> '_' (e.g. FLEET_READ_TOKEN_MY_ORG), matching the
+          # secrets scripts/fleet-token-setup.sh stores. <<<
+          FLEET_READ_TOKEN: ${{ secrets.FLEET_READ_TOKEN }}
         run: |
           set -o pipefail
           bash scripts/check-update-pipeline.sh | tee freshness.txt
@@ -47,5 +55,9 @@ jobs:
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
           else
+            # gh refuses unknown labels, which would swallow the alert on a
+            # fresh repo — ensure the label exists first (idempotent).
+            gh label create security --color B60205 \
+              --description "Automated security/drift alerts" --force || true
             gh issue create --title "$title" --body "$body" --label security
           fi

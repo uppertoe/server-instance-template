@@ -14,18 +14,39 @@
 #
 # Auth: uses `gh` — locally your login sees everything. In CI, GITHUB_TOKEN
 # only reads THIS repo and public repos; private fleet repos are then
-# reported as SKIP (warn), not drift. Set GH_TOKEN to a read-only
-# fine-grained PAT covering the fleet to make CI authoritative.
+# reported as SKIP (warn), not drift. To make CI authoritative, provision
+# read-only fine-grained PATs via scripts/fleet-token-setup.sh: a fine-grained
+# PAT is bound to ONE resource owner, so they arrive one per owner as
+# FLEET_READ_TOKEN_<OWNER> ('-' -> '_', uppercased), with FLEET_READ_TOKEN
+# then the ambient gh auth as fallbacks.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE_FILE="$ROOT_DIR/scripts/update-pipeline-state.json"
+
+# Run gh with the token that can see this repo. The server repo always uses
+# the ambient auth (in CI that's GITHUB_TOKEN, which reads it natively — an
+# owner token scoped to only the private fleet repos would 404 on it).
+gh_fleet() {
+  local repo="$1"; shift
+  if [[ "$repo" != "$SERVER_REPO" ]]; then
+    local owner_var
+    owner_var="FLEET_READ_TOKEN_$(printf '%s' "${repo%%/*}" | tr '[:lower:]-' '[:upper:]_' | tr -cd 'A-Z0-9_')"
+    local tok="${!owner_var:-${FLEET_READ_TOKEN:-}}"
+    if [[ -n "$tok" ]]; then
+      GH_TOKEN="$tok" gh "$@"
+      return
+    fi
+  fi
+  gh "$@"
+}
 
 read_state() { python3 -c "
 import json,sys
 s=json.load(open('$STATE_FILE'))
 print(s['$1'])"; }
 
+SERVER_REPO="$(read_state server_repo)"
 max_days="$(read_state max_days_since_renovate_activity)"
 repos="$(python3 -c "
 import json
@@ -38,9 +59,9 @@ warn=0
 
 for repo in $repos; do
   # (a) Renovate config present
-  if ! gh api "repos/$repo/contents/renovate.json" --jq .name >/dev/null 2>&1 \
-     && ! gh api "repos/$repo/contents/renovate.json5" --jq .name >/dev/null 2>&1; then
-    if gh api "repos/$repo" --jq .name >/dev/null 2>&1; then
+  if ! gh_fleet "$repo" api "repos/$repo/contents/renovate.json" --jq .name >/dev/null 2>&1 \
+     && ! gh_fleet "$repo" api "repos/$repo/contents/renovate.json5" --jq .name >/dev/null 2>&1; then
+    if gh_fleet "$repo" api "repos/$repo" --jq .name >/dev/null 2>&1; then
       echo "DRIFT  $repo: no renovate.json(5) at repo root"
       drift=1
     else
@@ -51,7 +72,7 @@ for repo in $repos; do
   fi
 
   # (b) no auto-disabled workflows (60-day inactivity kill switch)
-  disabled="$(gh api "repos/$repo/actions/workflows" \
+  disabled="$(gh_fleet "$repo" api "repos/$repo/actions/workflows" \
     --jq '.workflows[] | select(.state != "active") | "\(.name) (\(.state))"' 2>/dev/null || true)"
   if [[ -n "$disabled" ]]; then
     echo "DRIFT  $repo: workflow not active: $disabled"
@@ -59,11 +80,11 @@ for repo in $repos; do
   fi
 
   # (c) Renovate heartbeat: Dependency Dashboard updated recently
-  updated="$(gh api "repos/$repo/issues?creator=renovate%5Bbot%5D&state=open&per_page=10" \
+  updated="$(gh_fleet "$repo" api "repos/$repo/issues?creator=renovate%5Bbot%5D&state=open&per_page=10" \
     --jq '[.[] | select(.title | test("Dependency Dashboard"))][0].updated_at // empty' 2>/dev/null || true)"
   if [[ -z "$updated" ]]; then
     # Fall back to the most recent bot PR of any state.
-    updated="$(gh pr list -R "$repo" --state all -L 1 \
+    updated="$(gh_fleet "$repo" pr list -R "$repo" --state all -L 1 \
       --search "author:app/renovate" --json createdAt \
       --jq '.[0].createdAt // empty' 2>/dev/null || true)"
   fi
