@@ -7,6 +7,18 @@
   "docker": {
     "pinDigests": true,
   },
+  // Registry credential for PRIVATE first-party images (digest lookups fail
+  // with "No docker auth found" without it). The token itself lives in the
+  // Mend app UI (developer.mend.io -> org Credentials -> add a plain secret,
+  // NOT the "Env var" type): a classic PAT with read:packages only.
+  // "hostRules": [
+  //   {
+  //     "matchHost": "ghcr.io",
+  //     "hostType": "docker",
+  //     "username": "<github-username>",
+  //     "password": "{{ secrets.GHCR_READ_TOKEN }}",
+  //   },
+  // ],
   "packageRules": [
     // ── THIRD-PARTY images ──────────────────────────────────────────────
     // Pin + group digest bumps, and hold them for a 3-day cooldown before
@@ -49,6 +61,11 @@
       ],
       "matchUpdateTypes": ["digest", "pin", "pinDigest"],
       "minimumReleaseAge": "0 days",
+      // Own group, NOT the shared "docker image digests" one: a grouped PR
+      // only automerges when every member's status is green, so first-party
+      // CVE fixes would otherwise sit behind a third-party digest still
+      // serving its 3-day stability window.
+      "groupName": "first-party image digests",
       "automerge": true,
     },
 

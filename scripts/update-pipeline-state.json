@@ -1,0 +1,32 @@
+{
+  "_comment": [
+    "Intended state of the hands-off update pipeline \u2014 the parts that live",
+    "OUTSIDE this repo (Renovate/Mend app install + settings, app repos).",
+    "scripts/check-update-pipeline.sh verifies reality against this record;",
+    "the update-pipeline-freshness workflow runs it weekly and raises an",
+    "issue on drift. FILL AT COMMISSIONING: list your app repos below, and",
+    "record here (as your runbook) the external steps you performed:",
+    " - Renovate (Mend) GitHub App installed, repository access = the repos",
+    "   below plus this server repo.",
+    " - Mend org settings (developer.mend.io): 'Automated PRs' ENABLED",
+    "   (the default Silent mode makes every run a no-op).",
+    " - For PRIVATE images: Mend org secret (plain secret, NOT 'Env var')",
+    "   holding a read:packages classic PAT, referenced by the hostRules",
+    "   block in renovate.json5.",
+    " - Each app repo: publish workflow gated on tests AND a boot smoke",
+    "   (build with load:true, docker run, curl /healthz, only then push),",
+    "   plus a weekly schedule: cron so base-image fixes rebuild without a",
+    "   code push (stagger the crons; GitHub disables schedules after ~60",
+    "   days of repo inactivity \u2014 this weekly check catches that)."
+  ],
+  "server_repo": "<owner>/<this-server-repo>",
+  "renovate_bot_pattern": "renovate|mend",
+  "max_days_since_renovate_activity": 14,
+  "app_repos": [
+    {
+      "repo": "<owner>/<app-repo>",
+      "image": "ghcr.io/<owner>/<app>",
+      "weekly_rebuild": true
+    }
+  ]
+}
