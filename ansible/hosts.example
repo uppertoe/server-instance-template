@@ -110,3 +110,11 @@ ansible_python_interpreter=/usr/bin/python3
 # deploy_auto_update=true
 # The weekly scaffold-drift alert (enabled by default) tells you when
 # Ansible-layer changes are waiting in UPGRADING.md.
+#
+# Signed deploys (recommended once deploy_auto_update is on): the box refuses
+# to run a HEAD it cannot verify — operator SSH-signed pushes and GitHub
+# web/API merge commits (incl. Renovate automerge) pass; raw unsigned pushes
+# are refused + paged. Set up local signing FIRST (docs/05-access-model.md),
+# get a signed/merged commit onto main, THEN enable:
+# deploy_verify_signature=true
+# deploy_allowed_signers='["you@example.com ssh-ed25519 AAAA..."]'

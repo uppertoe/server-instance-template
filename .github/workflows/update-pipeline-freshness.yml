@@ -1,0 +1,64 @@
+name: Update Pipeline Freshness
+
+# Weekly truth-check on the hands-off update pipeline's OUT-OF-REPO state
+# (Renovate app installs, Mend settings, app-repo rebuild workflows), asserted
+# via observable GitHub reality against scripts/update-pipeline-state.json.
+# Catches the silent failure modes: cron workflows auto-disabled after 60 days
+# of inactivity, Renovate uninstalled / repo deselected / flipped to Silent
+# mode, and the registry-secret hostRule being dropped. Raises/updates an
+# issue on drift, like digest-freshness.
+#
+# GITHUB_TOKEN can't read the private fleet repos (reported as SKIP); the
+# FLEET_READ_TOKEN_* secrets (read-only fine-grained PATs, one per repo
+# owner — a fine-grained PAT is bound to a single resource owner) make it
+# authoritative. Provision them with scripts/fleet-token-setup.sh.
+
+on:
+  schedule:
+    - cron: "7 20 * * 0"   # weekly, Sun 20:07 UTC — after the rebuild window
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: read   # list THIS repo's workflows for the auto-disable check
+
+jobs:
+  update-pipeline-freshness:
+    name: Verify pipeline state vs record
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Check pipeline freshness
+        env:
+          # Ambient auth: reads this repo + public fleet repos.
+          GH_TOKEN: ${{ github.token }}
+          # Per-owner read-only PATs for the private fleet repos (see header;
+          # unset secrets resolve to empty and the script falls back).
+          # >>> EDIT: one line per owner of a private fleet repo, uppercased
+          # with '-' -> '_' (e.g. FLEET_READ_TOKEN_MY_ORG), matching the
+          # secrets scripts/fleet-token-setup.sh stores. <<<
+          FLEET_READ_TOKEN: ${{ secrets.FLEET_READ_TOKEN }}
+        run: |
+          set -o pipefail
+          bash scripts/check-update-pipeline.sh | tee freshness.txt
+
+      - name: Raise or update drift issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Update pipeline has drifted from its recorded state"
+          body="$(printf 'Weekly update-pipeline check found drift:\n\n```\n%s\n```\n\nReconcile reality with scripts/update-pipeline-state.json (or update the record if the change was intended).\n' "$(cat freshness.txt)")"
+          existing="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' || true)"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            # gh refuses unknown labels, which would swallow the alert on a
+            # fresh repo — ensure the label exists first (idempotent).
+            gh label create security --color B60205 \
+              --description "Automated security/drift alerts" --force || true
+            gh issue create --title "$title" --body "$body" --label security
+          fi
