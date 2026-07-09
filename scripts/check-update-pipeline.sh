@@ -71,12 +71,18 @@ for repo in $repos; do
     fi
   fi
 
-  # (b) no auto-disabled workflows (60-day inactivity kill switch)
-  disabled="$(gh_fleet "$repo" api "repos/$repo/actions/workflows" \
-    --jq '.workflows[] | select(.state != "active") | "\(.name) (\(.state))"' 2>/dev/null || true)"
-  if [[ -n "$disabled" ]]; then
-    echo "DRIFT  $repo: workflow not active: $disabled"
-    drift=1
+  # (b) no auto-disabled workflows (60-day inactivity kill switch).
+  # gh api prints the error BODY to stdout on an HTTP error, so gate on the
+  # exit status — otherwise a 403 JSON blob reads as a "disabled workflow".
+  if disabled="$(gh_fleet "$repo" api "repos/$repo/actions/workflows" \
+      --jq '.workflows[] | select(.state != "active") | "\(.name) (\(.state))"' 2>/dev/null)"; then
+    if [[ -n "$disabled" ]]; then
+      echo "DRIFT  $repo: workflow not active: $disabled"
+      drift=1
+    fi
+  else
+    echo "SKIP   $repo: cannot list workflows with this token"
+    warn=1
   fi
 
   # (c) Renovate heartbeat: Dependency Dashboard updated recently

@@ -21,6 +21,7 @@ on:
 permissions:
   contents: read
   issues: write
+  actions: read   # list THIS repo's workflows for the auto-disable check
 
 jobs:
   update-pipeline-freshness:
