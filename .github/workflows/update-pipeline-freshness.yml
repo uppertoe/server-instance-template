@@ -8,10 +8,11 @@ name: Update Pipeline Freshness
 # mode, and the registry-secret hostRule being dropped. Raises/updates an
 # issue on drift, like digest-freshness.
 #
-# GITHUB_TOKEN can't read the private fleet repos (reported as SKIP); the
-# FLEET_READ_TOKEN_* secrets (read-only fine-grained PATs, one per repo
-# owner — a fine-grained PAT is bound to a single resource owner) make it
-# authoritative. Provision them with scripts/fleet-token-setup.sh.
+# GITHUB_TOKEN can't read the private fleet repos (reported as SKIP);
+# per-owner tokens minted from the fleet GitHub App (created once with
+# scripts/fleet-app-setup.py; secrets FLEET_APP_ID/FLEET_APP_PRIVATE_KEY)
+# make it authoritative — same identity the Renovate runner uses, no
+# stored PATs, no rotation.
 
 on:
   schedule:
@@ -31,16 +32,23 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+      # Per-owner tokens minted from the fleet app (1-hour lifetime, no
+      # rotation). >>> EDIT: one mint step per owner holding private fleet
+      # repos, and one matching FLEET_READ_TOKEN_<OWNER> env line below
+      # (owner uppercased, '-' -> '_'). <<<
+      - name: Mint fleet token (<owner>)
+        id: app-owner1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.FLEET_APP_ID }}
+          private-key: ${{ secrets.FLEET_APP_PRIVATE_KEY }}
+          owner: <owner>
+
       - name: Check pipeline freshness
         env:
           # Ambient auth: reads this repo + public fleet repos.
           GH_TOKEN: ${{ github.token }}
-          # Per-owner read-only PATs for the private fleet repos (see header;
-          # unset secrets resolve to empty and the script falls back).
-          # >>> EDIT: one line per owner of a private fleet repo, uppercased
-          # with '-' -> '_' (e.g. FLEET_READ_TOKEN_MY_ORG), matching the
-          # secrets scripts/fleet-token-setup.sh stores. <<<
-          FLEET_READ_TOKEN: ${{ secrets.FLEET_READ_TOKEN }}
+          FLEET_READ_TOKEN_OWNER1: ${{ steps.app-owner1.outputs.token }}
         run: |
           set -o pipefail
           bash scripts/check-update-pipeline.sh | tee freshness.txt

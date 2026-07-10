@@ -13,10 +13,8 @@
 # in Silent mode").
 #
 # Auth: uses `gh` — locally your login sees everything. In CI, GITHUB_TOKEN
-# only reads THIS repo and public repos; private fleet repos are then
-# reported as SKIP (warn), not drift. To make CI authoritative, provision
-# read-only fine-grained PATs via scripts/fleet-token-setup.sh: a fine-grained
-# PAT is bound to ONE resource owner, so they arrive one per owner as
+# only reads THIS repo and public repos; the workflow makes it authoritative
+# by minting per-owner tokens from the fleet GitHub App and exporting them as
 # FLEET_READ_TOKEN_<OWNER> ('-' -> '_', uppercased), with FLEET_READ_TOKEN
 # then the ambient gh auth as fallbacks.
 set -euo pipefail
@@ -48,6 +46,9 @@ print(s['$1'])"; }
 
 SERVER_REPO="$(read_state server_repo)"
 max_days="$(read_state max_days_since_renovate_activity)"
+renovate_bots="$(python3 -c "
+import json
+for b in json.load(open('$STATE_FILE'))['renovate_bots']: print(b)")"
 repos="$(python3 -c "
 import json
 s=json.load(open('$STATE_FILE'))
@@ -100,14 +101,26 @@ for repo in $repos; do
     warn=1
   fi
 
-  # (c) Renovate heartbeat: Dependency Dashboard updated recently
-  updated="$(gh_fleet "$repo" api "repos/$repo/issues?creator=renovate%5Bbot%5D&state=open&per_page=10" \
-    --jq '[.[] | select(.title | test("Dependency Dashboard"))][0].updated_at // empty' 2>/dev/null || true)"
+  # (c) Renovate heartbeat: Dependency Dashboard updated recently. Both bot
+  # identities count — dashboards created by Mend keep renovate[bot] as their
+  # immutable creator even after the self-hosted runner takes them over, while
+  # fresh repos get uppertoe-fleet-bot[bot] ones (see renovate_bots in the
+  # state file).
+  updated=""
+  for bot in $renovate_bots; do
+    enc="${bot//\[/%5B}"; enc="${enc//\]/%5D}"
+    u="$(gh_fleet "$repo" api "repos/$repo/issues?creator=${enc}&state=open&per_page=10" \
+      --jq '[.[] | select(.title | test("Dependency Dashboard"))][0].updated_at // empty' 2>/dev/null || true)"
+    [[ -n "$u" && ( -z "$updated" || "$u" > "$updated" ) ]] && updated="$u"
+  done
   if [[ -z "$updated" ]]; then
     # Fall back to the most recent bot PR of any state.
-    updated="$(gh_fleet "$repo" pr list -R "$repo" --state all -L 1 \
-      --search "author:app/renovate" --json createdAt \
-      --jq '.[0].createdAt // empty' 2>/dev/null || true)"
+    for bot in $renovate_bots; do
+      u="$(gh_fleet "$repo" pr list -R "$repo" --state all -L 1 \
+        --search "author:app/${bot%\[bot\]}" --json createdAt \
+        --jq '.[0].createdAt // empty' 2>/dev/null || true)"
+      [[ -n "$u" && ( -z "$updated" || "$u" > "$updated" ) ]] && updated="$u"
+    done
   fi
   if [[ -z "$updated" ]]; then
     echo "DRIFT  $repo: no Renovate dashboard or PRs found — app not installed, repo not selected, or Silent mode"
@@ -126,10 +139,17 @@ print((datetime.now(timezone.utc)-d).days)")"
   fi
 done
 
-# Server-repo config still references the Mend-held registry secret.
-if ! grep -q "secrets.GHCR_READ_TOKEN" "$ROOT_DIR/renovate.json5"; then
-  echo "DRIFT  renovate.json5: ghcr.io hostRule no longer references GHCR_READ_TOKEN"
-  drift=1
+# The ghcr hostRule (private image digest lookups) lives in the self-hosted
+# runner's global config — assert it still references the registry secret.
+runner_repo="$(read_state renovate_runner_repo)"
+if cfg_js="$(gh_fleet "$runner_repo" api "repos/$runner_repo/contents/config.js" --jq .content 2>/dev/null)"; then
+  if ! printf '%s' "$cfg_js" | base64 -d 2>/dev/null | grep -q "GHCR_READ_TOKEN"; then
+    echo "DRIFT  renovate-runner: config.js no longer references GHCR_READ_TOKEN"
+    drift=1
+  fi
+else
+  echo "SKIP   renovate-runner: cannot read config.js with this token"
+  warn=1
 fi
 
 if (( drift )); then
