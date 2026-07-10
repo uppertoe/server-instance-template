@@ -58,14 +58,29 @@ drift=0
 warn=0
 
 for repo in $repos; do
-  # (a) Renovate config present
-  if ! gh_fleet "$repo" api "repos/$repo/contents/renovate.json" --jq .name >/dev/null 2>&1 \
-     && ! gh_fleet "$repo" api "repos/$repo/contents/renovate.json5" --jq .name >/dev/null 2>&1; then
+  # (a) Renovate config present. gh api exits identically for "404 file
+  # missing" and transient errors (rate limit, 5xx, network), so classify by
+  # the error body — only a real Not Found on both filenames is drift
+  # (GitHub also 404s unreadable private repos, which stays the SKIP path via
+  # the repo probe). Anything else is a transient: warn, don't page.
+  cfg="MISSING"
+  for f in renovate.json renovate.json5; do
+    if out="$(gh_fleet "$repo" api "repos/$repo/contents/$f" --jq .name 2>&1)"; then
+      cfg="FOUND"
+      break
+    fi
+    printf '%s' "$out" | grep -q "Not Found" || cfg="ERROR"
+  done
+  if [[ "$cfg" == "ERROR" ]]; then
+    echo "SKIP   $repo: transient API error reading repo contents"
+    warn=1
+    continue
+  elif [[ "$cfg" == "MISSING" ]]; then
     if gh_fleet "$repo" api "repos/$repo" --jq .name >/dev/null 2>&1; then
       echo "DRIFT  $repo: no renovate.json(5) at repo root"
       drift=1
     else
-      echo "SKIP   $repo: not readable with this token (set GH_TOKEN for full coverage)"
+      echo "SKIP   $repo: not readable with this token (set FLEET_READ_TOKEN_* for full coverage)"
       warn=1
       continue
     fi
