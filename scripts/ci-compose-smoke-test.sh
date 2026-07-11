@@ -21,6 +21,11 @@ cleanup() {
   if [[ -n "${GENERATED_APP_ENVS:-}" ]]; then
     rm -f $GENERATED_APP_ENVS
   fi
+  rm -f docker-compose.rehearsal.yml /tmp/ci-smoke-config-{old,new}.json
+  if [[ -n "${REHEARSAL_TREE:-}" ]]; then
+    git worktree remove --force "$REHEARSAL_TREE" >/dev/null 2>&1 || true
+    rm -rf "$REHEARSAL_TREE"
+  fi
 }
 
 wait_for_caddy() {
@@ -181,6 +186,85 @@ for example in apps/*/.env.example; do
   sed -E 's/^([A-Za-z_][A-Za-z0-9_]*)=$/\1=cidummy0/' "$example" > "$app_env"
   GENERATED_APP_ENVS="$GENERATED_APP_ENVS $app_env"
 done
+
+# --- Database upgrade rehearsal (state-transition rigour) --------------------
+# A db-image bump must prove the NEW image starts on data the OLD image wrote
+# — booting fresh volumes proves only "vN+1 starts", which is how the pg18
+# bump reached prod (2026-07-10). A red result on a database MAJOR is the
+# honest signal (in-place major upgrades are typically impossible): plan the
+# migration (dump -> new volume -> restore) before merging.
+echo "Rehearsing database image upgrades against ${REHEARSAL_BASE_REF:-origin/main}"
+REHEARSAL_BASE_REF="${REHEARSAL_BASE_REF:-origin/main}"
+git rev-parse --verify -q "$REHEARSAL_BASE_REF" >/dev/null 2>&1 || git fetch -q origin main >/dev/null 2>&1 || true
+if git rev-parse --verify -q "$REHEARSAL_BASE_REF" >/dev/null 2>&1; then
+  REHEARSAL_TREE="$(mktemp -d)"
+  rmdir "$REHEARSAL_TREE" && git worktree add -q --detach "$REHEARSAL_TREE" "$REHEARSAL_BASE_REF"
+  # The worktree lacks the submodule + secrets; the include tree and env are
+  # identical enough for config rendering.
+  cp .env "$REHEARSAL_TREE/.env"
+  rm -rf "$REHEARSAL_TREE/scaffold" && cp -R scaffold "$REHEARSAL_TREE/scaffold"
+  "${BASE_COMPOSE[@]}" config --format json > /tmp/ci-smoke-config-new.json 2>/dev/null
+  (cd "$REHEARSAL_TREE" && docker compose -f docker-compose.yml config --format json) \
+    > /tmp/ci-smoke-config-old.json 2>/dev/null || echo '{}' > /tmp/ci-smoke-config-old.json
+
+  rehearsal_pairs="$(python3 - /tmp/ci-smoke-config-old.json /tmp/ci-smoke-config-new.json <<'PY'
+import json, sys
+old = json.load(open(sys.argv[1])).get("services", {})
+new = json.load(open(sys.argv[2])).get("services", {})
+dbs = ("postgres:", "mariadb:", "mysql:", "mongo:")
+for name, svc in sorted(new.items()):
+    ni = str(svc.get("image", ""))
+    oi = str(old.get(name, {}).get("image", ""))
+    if ni.startswith(dbs) and oi.startswith(dbs) and oi != ni:
+        print(f"{name} {oi} {ni}")
+PY
+)"
+
+  while read -r svc old_img new_img; do
+    [[ -z "$svc" ]] && continue
+    echo "  rehearsing $svc: ${old_img%%@*} -> ${new_img%%@*}"
+    cat > docker-compose.rehearsal.yml <<EOF
+services:
+  $svc:
+    image: "$old_img"
+EOF
+    if ! docker compose -f docker-compose.yml -f "$CI_OVERRIDE_FILE" -f docker-compose.rehearsal.yml \
+        up -d --wait --wait-timeout 120 "$svc"; then
+      "${BASE_COMPOSE[@]}" logs --tail 25 "$svc" || true
+      echo "rehearsal setup failed: old image did not become healthy on a fresh volume" >&2
+      exit 1
+    fi
+    cid="$("${BASE_COMPOSE[@]}" ps -q "$svc")"
+    marker_ok=false
+    if [[ "$new_img" == postgres:* ]]; then
+      pg_user="$(docker exec "$cid" printenv POSTGRES_USER 2>/dev/null || echo postgres)"
+      pg_db="$(docker exec "$cid" printenv POSTGRES_DB 2>/dev/null || echo postgres)"
+      docker exec "$cid" psql -q -U "$pg_user" -d "$pg_db" \
+        -c "CREATE TABLE IF NOT EXISTS upgrade_rehearsal(marker text); INSERT INTO upgrade_rehearsal VALUES ('ci');" >/dev/null
+      marker_ok=true
+    fi
+    rm -f docker-compose.rehearsal.yml
+    if ! "${BASE_COMPOSE[@]}" up -d --wait --wait-timeout 120 "$svc"; then
+      "${BASE_COMPOSE[@]}" logs --tail 25 "$svc" || true
+      echo "UPGRADE REHEARSAL FAILED: $svc cannot start ${new_img%%@*} on data written by ${old_img%%@*}." >&2
+      echo "In-place upgrades are typically impossible across database majors — plan a migration" >&2
+      echo "(dump -> recreate volume on the new image -> restore) BEFORE merging this bump." >&2
+      exit 1
+    fi
+    if [[ "$marker_ok" == "true" ]]; then
+      cid="$("${BASE_COMPOSE[@]}" ps -q "$svc")"
+      if ! docker exec "$cid" psql -q -U "$pg_user" -d "$pg_db" \
+          -tAc "SELECT marker FROM upgrade_rehearsal LIMIT 1" 2>/dev/null | grep -q ci; then
+        echo "UPGRADE REHEARSAL FAILED: $svc lost the marker row across the image change" >&2
+        exit 1
+      fi
+    fi
+    echo "  $svc: upgrade rehearsal OK (data survived ${old_img%%@*} -> ${new_img%%@*})"
+  done <<<"$rehearsal_pairs"
+  [[ -z "$rehearsal_pairs" ]] && echo "  (no database image changes vs base — skipped)"
+else
+  echo "  (base ref unavailable — rehearsal skipped)"
+fi
 
 data_manifest="$("${BASE_COMPOSE[@]}" config --format json 2>/dev/null | python3 -c "
 import json, sys
