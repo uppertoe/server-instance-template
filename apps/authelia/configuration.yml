@@ -149,6 +149,11 @@ identity_providers:
         client_secret: '{{ secret "/config/secrets/cms-auth.hash" }}'
         public: false
         authorization_policy: cms_auth
+        # The broker sends its secret in the token-request body. Authelia
+        # defaults a confidential client to client_secret_basic and rejects the
+        # body form with 401 ("invalid_client") -- so declare the method the
+        # broker actually uses, or the OIDC login fails at the code->token step.
+        token_endpoint_auth_method: 'client_secret_post'
         consent_mode: 'implicit'
         response_modes:
           - 'query'
