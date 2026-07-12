@@ -85,6 +85,10 @@ if [ -z "$oidc_secret" ] || [ -z "$oidc_digest" ]; then
 fi
 printf '%s\n' "$oidc_digest" >"$hash_file"
 chmod 600 "$hash_file"
+# Authelia reads this mounted :ro as uid 1000; if setup ran as root the file
+# would be root-owned and unreadable, crashing the provider. chown best-effort
+# (no-op / harmless when already uid 1000).
+chown 1000:1000 "$hash_file" 2>/dev/null || true
 echo "  wrote $hash_file"
 
 say "5/6  Writing $env_file"
