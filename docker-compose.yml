@@ -18,5 +18,15 @@ include:
   # SESSION_SECRET, ALLOWED_EMAIL_DOMAINS, ADMIN_EMAILS, EMAIL_*), then
   # uncomment the line below. See scaffold/docs/07-auth.md.
   # - apps/auth/docker-compose.yml
+  # Authelia OIDC provider (SSO) -- required by the CMS commit broker below and
+  # any other OIDC app. To enable: cp apps/authelia/.env.example apps/authelia/.env,
+  # set the AUTHELIA_* secrets, rename apps/authelia/authelia.caddy.disabled ->
+  # authelia.caddy, then uncomment. See apps/authelia/README.md.
+  # - apps/authelia/docker-compose.yml
+  # Decap CMS commit broker -- editors sign in via Authelia (above) and commit
+  # through a shared GitHub App, authored as themselves. One-time setup:
+  # bash apps/cms-auth/setup.sh; rename apps/cms-auth/cms-auth.caddy.disabled ->
+  # cms-auth.caddy, then uncomment. See apps/cms-auth/README.md.
+  # - apps/cms-auth/docker-compose.yml
   # Add one line per app:
   # - apps/myapp/docker-compose.yml

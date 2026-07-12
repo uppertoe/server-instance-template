@@ -1,0 +1,21 @@
+# apps/cms-auth/cms-auth.caddy
+# PUBLIC host for the Decap CMS commit broker. It is NOT behind the estate login
+# wall: the OIDC provider (Authelia) redirects the browser to /callback here, and
+# the CMS calls the /api commit proxy cross-origin. Security is the OIDC login
+# (plus the cms-editors group policy at Authelia) and the signed session token
+# the /api proxy validates; the shared GitHub App key stays server-side. One
+# broker backs every CMS site; each site's Decap config points base_url + api_root
+# at this host.
+# (Keep comments free of curly braces -- the render step counts braces.)
+cms-auth.{$DOMAIN} {
+	# Keep the single-use OIDC authorization code out of the access log: it rides
+	# in the /callback query string, and the log ships to the tamper-evident bucket.
+	@callback path /callback
+	log_skip @callback
+
+	reverse_proxy cms-auth:8080 {
+		# Overwrite X-Forwarded-For with the true peer so the broker's per-IP
+		# rate limiter can't be fooled by a client-supplied header.
+		header_up X-Forwarded-For {http.request.remote.host}
+	}
+}

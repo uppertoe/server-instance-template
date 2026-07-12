@@ -1,0 +1,52 @@
+# cms-auth: OIDC-gated commit broker for the Git-based CMS (Decap) on the Hugo
+# sites. Editors sign in with Authelia (OIDC) — no GitHub account each — and the
+# broker commits through ONE shared GitHub App, stamping each commit's author
+# with the signed-in editor. The App private key is minted into installation
+# tokens SERVER-SIDE and never reaches the browser.
+#
+# Public host cms-auth.<DOMAIN>: the OIDC provider redirects the browser to
+# /callback here, and the CMS calls the /api commit proxy cross-origin, so this
+# host is NOT behind the estate login wall. Security is the OIDC login (+ the
+# cms-editors group policy at Authelia) plus the signed session token the /api
+# proxy validates. Publishes no ports; Caddy reaches it over the generated
+# cms-auth_proxy network. ONE broker serves every CMS site in the estate — each
+# site points its Decap config at this host and is added to ALLOWED_ORIGINS /
+# ALLOWED_REPOS.
+services:
+  cms-auth:
+    # Multi-arch index digest of ghcr.io/uppertoe/cms-auth:latest (Renovate keeps
+    # it current thereafter). Re-pin with:
+    #   docker buildx imagetools inspect ghcr.io/uppertoe/cms-auth:latest
+    image: ghcr.io/uppertoe/cms-auth:latest@sha256:6b8d5bfb5c57befdb5030d2502afbab77704d2db4bd90597872b40ef4a3598aa
+    restart: unless-stopped
+    env_file:
+      # Deployment-specific values + secrets: ALLOWED_ORIGINS, ALLOWED_REPOS,
+      # GITHUB_APP_ID/INSTALLATION_ID, COMMITTER_*, and the three secrets
+      # (OIDC_CLIENT_SECRET, GITHUB_APP_PRIVATE_KEY_B64, SESSION_SECRET).
+      - path: ./.env
+        required: false # keep `docker compose config` valid in CI without a real .env
+    environment:
+      # Non-secret, DOMAIN-derived — identical across the fleet.
+      - BASE_URL=https://cms-auth.${DOMAIN}
+      - OIDC_ISSUER=https://sso.${DOMAIN}
+      - OIDC_CLIENT_ID=cms-auth
+      # Only members of this Authelia group may obtain an editing session. The
+      # provider ALSO enforces it (authorization_policies), so this is defence in
+      # depth; keep the two in sync.
+      - OIDC_EDITOR_GROUP=cms-editors
+    # --- CIS Docker §5 ---
+    user: "65532:65532"        # distroless nonroot; the broker writes nothing
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    mem_limit: 96m
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "/app", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    # NOTE: no published ports — only Caddy may reach the service.

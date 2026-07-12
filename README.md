@@ -248,6 +248,26 @@ dashboard.{$DOMAIN} {
 Full details, the admin TOTP option, and a local end-to-end test are in
 [scaffold/docs/07-auth.md](https://github.com/uppertoe/vps-base-template/blob/main/docs/07-auth.md).
 
+### SSO + CMS (Authelia + Decap), optional
+
+Two paired apps ship **off by default** for running a Git-based CMS whose editors
+have **no GitHub accounts**:
+
+- **`apps/authelia`** — an OpenID Connect provider (`sso.<domain>`), separate from
+  the `apps/auth` gateway above. This is the login for editors.
+- **`apps/cms-auth`** — a broker that lets [Decap CMS](https://decapcms.org/) commit
+  through **one shared GitHub App**, with each commit **authored as the signed-in
+  editor** (the App key stays server-side, never in the browser).
+
+**Enable:** turn on `apps/authelia` (set its `AUTHELIA_*` secrets, rename
+`authelia.caddy.disabled` → `authelia.caddy`, uncomment its include), then run
+`bash apps/cms-auth/setup.sh` — it mints the OIDC client secret, assembles the
+`.env`, base64s the GitHub App key, and renders Caddy; you click through the App
+creation and add editors to the `cms-editors` group. Point your CMS site's Decap
+`config.yml` at `base_url` + `api_root: https://cms-auth.<domain>/api`. See
+[`apps/cms-auth/README.md`](apps/cms-auth/README.md) and
+[`apps/authelia/README.md`](apps/authelia/README.md).
+
 ---
 
 ## Database backups

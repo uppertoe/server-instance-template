@@ -1,0 +1,30 @@
+# Authelia user list -- you maintain this by hand.
+#
+# Copy to apps/authelia/users_database.yml on the SERVER and edit it there. The
+# real file is gitignored and set to mode 600 by deploy.sh (it holds password
+# hashes). deploy.sh seeds it from this example on first run if it is missing.
+#
+# Generate a password hash with:
+#   docker compose run --rm authelia \
+#     authelia crypto hash generate argon2 --password 'the-password'
+# Paste the resulting "$argon2id$..." string as the user's `password`.
+#
+# Groups drive per-app access: an OIDC client's authorization_policy (in
+# configuration.yml) lists the groups whose members may obtain a token for it.
+#
+# For the CMS commit broker (apps/cms-auth), membership in:
+#   cms-editors  -> may sign in to Decap CMS and commit as themselves
+# gates editing; a user not in cms-editors is denied a token by the `cms_auth`
+# authorization policy.
+
+users:
+  # Placeholder so a freshly-seeded file loads cleanly. It is DISABLED (can't log
+  # in) and the hash is a throwaway -- replace this entry with real users. Add a
+  # real user by copying the shape: set disabled:false, a real argon2id hash
+  # (command above), the email, and the groups that grant access.
+  placeholder:
+    disabled: true
+    displayname: 'Placeholder (disabled) -- replace me'
+    password: '$argon2id$v=19$m=65536,t=3,p=4$yuimGwOG9mn19/glH+LP/Q$yBw+b8oaQOK0aOe40gyqaCFJ+MD5dn8c59O+eXQCdDY'
+    email: 'placeholder@example.com'
+    groups: []

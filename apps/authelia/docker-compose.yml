@@ -1,0 +1,122 @@
+services:
+  authelia:
+    # Authelia: OpenID-certified SSO/OIDC provider. SEPARATE from the
+    # forward-auth gateway (apps/auth) -- its own user pool, on sso.<domain>.
+    # Pin by digest in your server repo (Renovate's pinDigests does this).
+    image: ghcr.io/authelia/authelia:latest@sha256:1b363e9279e742397966333f364e0876ae02bf5c876de73e83af6d48c57ff51b
+    restart: unless-stopped
+    # Run non-root (CIS Docker §5). Authelia only reads /config (bind-mounted
+    # read-only) and writes /data (a named volume chown'd by deploy.sh).
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    # NOTE: read_only is intentionally NOT set. Authelia v4.39 writes to its
+    # rootfs during startup (before the provider checks run) and crash-loops on a
+    # read-only filesystem even with /tmp on tmpfs -- verified locally. The other
+    # CIS §5 controls (non-root, cap_drop ALL, no-new-privileges, limits) stay.
+    mem_limit: 256m
+    pids_limit: 256
+    env_file:
+      # Holds the four AUTHELIA_* secrets (OIDC client hashes live in secrets/).
+      - path: ./.env
+        required: false # keep `docker compose config` valid in CI without a real .env
+    environment:
+      # DOMAIN is substituted into configuration.yml via Authelia's templating.
+      - DOMAIN=${DOMAIN}
+      # Enable the config template filter so `{{ env ... }}` / `fileContent`
+      # work in configuration.yml. Without this the template tags are literal.
+      - X_AUTHELIA_CONFIG_FILTERS=template
+    volumes:
+      # Writable state: SQLite DB, the generated OIDC issuer key, the filesystem
+      # notifier file. Root-owned on creation -> chown'd to 1000:1000 by deploy.sh.
+      - authelia_data:/data
+      # Non-secret config, committed to the repo, mounted read-only.
+      - ./configuration.yml:/config/configuration.yml:ro
+      # Admin-maintained user list, mounted as a DIRECTORY (not a single file).
+      # Mounted READ-WRITE: self-service reset writes the new password hash back,
+      # and the invite portal (apps/users) writes new/removed users here, so
+      # Authelia (uid 1000) must be able to write it -- deploy.sh owns the dir to
+      # uid 1000 (the repo-wide deploy-user assumption).
+      #
+      # Why a directory, not `./users_database.yml:/config/...` (a single file):
+      # a single-file bind mount pins the file's inode at container start, so an
+      # atomic temp+rename replacement (how the portal writes) swaps in a new
+      # inode the container never sees -- Authelia would read the stale file
+      # forever and its own reset write-backs would land on the orphaned inode.
+      # A directory mount shares the dir inode, so in-container fsnotify sees the
+      # rename and `watch: true` (configuration.yml) hot-reloads. The portal's
+      # sibling files (.bak/.tmp/.portal.lock) are ignored -- Authelia filters
+      # watch events by basename and only ever loads users_database.yml.
+      - ./users:/config/users
+      # Per-client OIDC secret hashes. Mounted as FILES (gitignored *.hash, seeded
+      # from secrets/*.example by deploy.sh) rather than env vars, because pbkdf2
+      # hashes contain '$' which Compose would interpolate away in env values.
+      - ./secrets:/config/secrets:ro
+      # Login-portal branding overrides (logo.png) -- see configuration.yml asset_path.
+      - ./assets:/config/assets:ro
+    depends_on:
+      # Sessions live in Redis (configuration.yml session.redis) so they survive
+      # an Authelia recreate/redeploy -- without it, every deploy force-recreates
+      # Authelia and drops all in-memory sessions. Wait for Redis to be healthy.
+      authelia-redis:
+        condition: service_healthy
+    # authelia_internal: private link to authelia-redis (session store). The
+    # Caddy-facing wiring is generated (.generated/caddy/networks.yml): authelia
+    # additionally joins its own authelia_proxy network, which Caddy also joins.
+    # OIDC clients reach Authelia via the public URL (https://sso.<domain>,
+    # hairpin through Caddy), never container-to-container.
+    networks:
+      - authelia_internal
+    # The Authelia image ships its own HEALTHCHECK against /api/health, so we
+    # don't override it here (the distroless image has no shell for a custom one).
+
+  authelia-redis:
+    # Session store for Authelia (persistent, so sessions survive an Authelia
+    # recreate AND a host reboot -- the AOF is on the authelia_redis_data volume,
+    # deploy.sh chowns it to 999:999). Off every Caddy-reachable network; no
+    # published ports (ISM database-tier separation, as with any db tier).
+    image: redis:8-alpine@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005
+    restart: unless-stopped
+    # Run as the alpine redis uid (999). The volume is pre-chowned to 999:999 by
+    # deploy.sh so no privilege drop is needed -> cap_drop ALL is safe.
+    user: "999:999"
+    command:
+      - redis-server
+      # Persist via append-only file (fsync every second) so a recreate/reboot
+      # keeps sessions. Cap memory well below the box; sessions are tiny.
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 64mb
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - authelia_redis_data:/data
+    networks:
+      - authelia_internal
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    init: true
+    mem_limit: 96m
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  authelia_data:
+  authelia_redis_data:
+
+networks:
+  # Private link between authelia and its session store. internal: true = no
+  # ingress/egress; Caddy is NOT on it (authelia reaches Caddy via authelia_proxy).
+  authelia_internal:
+    internal: true

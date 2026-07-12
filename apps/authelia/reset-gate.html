@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Reset your password</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:#f4f5f7; margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; }
+  .card { background:#fff; padding:2rem 2.25rem; border-radius:12px; box-shadow:0 4px 24px rgba(0,0,0,.08); width:100%; max-width:360px; }
+  h1 { font-size:1.25rem; margin:0 0 .5rem; color:#111827; }
+  p { color:#4b5563; font-size:.92rem; line-height:1.45; margin:0 0 1.25rem; }
+  label { display:block; font-size:.85rem; font-weight:600; margin-bottom:.35rem; color:#374151; }
+  input { width:100%; box-sizing:border-box; padding:.6rem .7rem; font-size:1rem; border:1px solid #cbd5e1; border-radius:8px; }
+  input:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.15); }
+  button { width:100%; margin-top:1rem; padding:.65rem; font-size:1rem; font-weight:600; color:#fff; background:#2563eb; border:none; border-radius:8px; cursor:pointer; }
+  button:hover { background:#1d4ed8; }
+  .err { color:#b91c1c; font-size:.85rem; margin-top:.5rem; min-height:1.1em; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Reset your password</h1>
+    <p>To continue, confirm your email address below. This quick step stops the reset link from being opened automatically by email security software.</p>
+    <form id="f" novalidate>
+      <label for="email">Email address</label>
+      <input id="email" type="email" autocomplete="username" autofocus>
+      <div class="err" id="err"></div>
+      <button type="submit">Continue</button>
+    </form>
+  </div>
+  <script>
+    // Nothing happens on load. The hand-off to Authelia fires ONLY from a real
+    // human submit carrying a non-empty, email-shaped value. A scanner that
+    // renders this page and runs the JS will not type into the field, so it
+    // never reaches the real reset endpoint and never consumes the token.
+    (function () {
+      var token = new URLSearchParams(window.location.search).get('token') || '';
+      var form = document.getElementById('f');
+      var err = document.getElementById('err');
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var v = (document.getElementById('email').value || '').trim();
+        if (v.length > 2 && v.indexOf('@') > 0 && token) {
+          window.location.href = '/reset-password/step2?token=' + encodeURIComponent(token) + '&go=1';
+        } else {
+          err.textContent = 'Please enter your email address to continue.';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

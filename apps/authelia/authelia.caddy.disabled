@@ -1,0 +1,61 @@
+# Authelia SSO / OIDC provider. This IS the login site -- there is NO
+# forward_auth in front of it (that would create a redirect loop). It is a
+# separate identity provider from the apps/auth forward-auth gateway and has its
+# own user pool; see apps/authelia/README.md.
+#
+# Overwrite X-Forwarded-For with the true peer address so a client cannot spoof
+# it: Caddy faces clients directly here (no CDN/upstream proxy -- see
+# apps/auth/auth.caddy), so the remote host is the real client. Caddy sets
+# X-Forwarded-Proto / X-Forwarded-Host on reverse_proxy automatically.
+#
+# Reset-link interstitial (Safe Links defence): RCH's Microsoft Defender Safe
+# Links detonates the reset link on delivery -- it loads the page, runs the JS,
+# and POSTs identity/finish, consuming the one-time token before the user ever
+# clicks (proven on the live scanner). To survive that, the BARE reset URL
+# (/reset-password/step2 without go=1) serves a static interstitial instead of
+# Authelia's reset SPA. Only a human typing their email and submitting reaches
+# Authelia: the page then redirects to the same URL with go=1, which is proxied
+# through to the real SPA. A scanner renders the page and runs the JS but does
+# not fill the field, so it never produces go=1 and never consumes the token.
+# See apps/authelia/reset-gate.html.
+#
+# Access logging is on (JSON to stdout) so reset-endpoint hits can be audited.
+#
+# NOTE: keep comments in .caddy files free of braces -- the scaffold's
+# run-caddy.sh counts braces when assembling the Caddyfile.
+sso.{$DOMAIN} {
+	import error_pages /srv/www/dash
+	log {
+		output stdout
+		format json
+	}
+
+	@reset_gate {
+		path /reset-password/step2
+		not {
+			query go=1
+		}
+	}
+	handle @reset_gate {
+		root * /srv/repo/apps/authelia
+		rewrite * /reset-gate.html
+		file_server
+	}
+
+	# The reset email also carries a "this wasn't me / revoke" link. The scanner
+	# follows it and its JS fires DELETE /api/reset-password, which ALSO kills the
+	# token. Serve a static info page for the revoke link so the page-load can't
+	# trigger the DELETE. Self-service revoke is dropped; the token expires anyway.
+	@revoke path /revoke/reset-password /revoke/reset-password/*
+	handle @revoke {
+		root * /srv/repo/apps/authelia
+		rewrite * /revoke-info.html
+		file_server
+	}
+
+	handle {
+		reverse_proxy authelia:9091 {
+			header_up X-Forwarded-For {http.request.remote.host}
+		}
+	}
+}

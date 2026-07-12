@@ -1,0 +1,163 @@
+# Authelia configuration -- NON-SECRET, committed to the repo.
+#
+# Secrets are injected from apps/authelia/.env (the four AUTHELIA_* vars); OIDC
+# client-secret hashes live in secrets/*.hash and the OIDC issuer private key is
+# generated on the server by deploy.sh (read from /data/oidc.key.pem). Nothing
+# here is a secret.
+#
+# Templating: this file uses Authelia's config template filter (enabled by
+# X_AUTHELIA_CONFIG_FILTERS=template in docker-compose.yml). `{{ env "DOMAIN" }}`
+# expands to the deployment domain; `fileContent` loads the issuer key.
+
+theme: light
+
+server:
+  address: 'tcp://:9091'
+  # Branding overrides (login portal logo / favicon). Files live in
+  # apps/authelia/assets/ (logo.png) and are mounted read-only at /config/assets.
+  asset_path: /config/assets
+
+log:
+  level: info
+  format: text
+
+# --- Who can sign in: the admin-maintained file backend ---
+authentication_backend:
+  # Self-service password reset is ENABLED, but protected from Defender Safe Links
+  # by a Caddy-served interstitial (apps/authelia/reset-gate.html) -- the bare
+  # reset link serves a human gate, and only a typed-email submission reaches this
+  # flow, so the scanner can't consume the token. See apps/authelia/authelia.caddy.
+  # Passwords can still be admin-set (edit users_database.yml + restart Authelia).
+  password_reset:
+    disable: false
+  file:
+    path: /config/users/users_database.yml
+    # Hot-reload the user list when the file changes on disk. The file lives in
+    # a directory-mounted folder (see docker-compose.yml), so Authelia's watcher
+    # (fsnotify on the parent dir, filtered to this basename) picks up both
+    # hand-edits and the invite portal's atomic rename -- no restart needed.
+    # Authelia's own reset write-backs are debounced (500ms) so they don't loop.
+    watch: true
+    # Let users sign in (and request resets) with their email, not just the
+    # username -- emails are what people know, and they must match each user's
+    # account email in the OIDC apps for linking. Requires emails to be unique across
+    # users_database.yml; case_insensitive avoids surprises with mixed-case input.
+    search:
+      email: true
+      case_insensitive: true
+    password:
+      algorithm: argon2
+      argon2:
+        variant: argon2id
+        iterations: 3
+        memory: 65536
+        parallelism: 4
+        key_length: 32
+        salt_length: 16
+
+# --- Sessions (persisted in Redis) ---
+# Sessions live in Redis (authelia-redis, see docker-compose.yml) with an
+# append-only file on a volume, so they survive an Authelia recreate/redeploy
+# and a host reboot -- no forced re-login on every deploy. Redis sits on the
+# internal-only authelia_internal network (no auth needed: no other tenant can
+# reach it, and it publishes no ports).
+session:
+  name: authelia_session
+  # secret <- AUTHELIA_SESSION_SECRET
+  expiration: '1h'
+  inactivity: '15m'
+  remember_me: '1M'
+  cookies:
+    - domain: '{{ env "DOMAIN" }}'
+      authelia_url: 'https://sso.{{ env "DOMAIN" }}'
+  redis:
+    host: authelia-redis
+    port: 6379
+    database_index: 0
+
+# --- Storage (SQLite on the data volume) ---
+storage:
+  local:
+    path: /data/db.sqlite3
+  # encryption_key <- AUTHELIA_STORAGE_ENCRYPTION_KEY
+
+# --- Notifier (email via SMTP -- AWS SES) ---
+# Authelia requires a notifier even though self-service reset is disabled above.
+# Retained on SES so it's ready if TOTP/2FA or admin notifications are enabled
+# later. SES SMTP creds + From are injected from apps/authelia/.env
+# (AUTHELIA_NOTIFIER_SMTP_*); see scripts/aws-ses-setup.py.
+notifier:
+  # Skip the SMTP probe at startup: SES in sandbox mode rejects unverified
+  # recipients, and a failed probe would block startup. Mail is still sent when a
+  # password reset is actually requested.
+  disable_startup_check: true
+  smtp:
+    # address / username / password / sender come from apps/authelia/.env, e.g.
+    # AUTHELIA_NOTIFIER_SMTP_ADDRESS=submission://email-smtp.ap-southeast-2.amazonaws.com:587
+    identifier: '{{ env "DOMAIN" }}'
+    subject: '[RCH Anaesthesia] {title}'
+    startup_check_address: 'authelia@{{ env "DOMAIN" }}'
+
+# jwt_secret <- AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET
+identity_validation:
+  reset_password: {}
+
+# --- Access control ---
+# Default deny; the Authelia portal itself only needs first-factor. Per-app
+# authorization for OIDC clients is handled by authorization_policies below.
+access_control:
+  default_policy: deny
+  rules:
+    - domain: 'sso.{{ env "DOMAIN" }}'
+      policy: one_factor
+
+# --- OIDC provider ---
+identity_providers:
+  oidc:
+    # hmac_secret <- AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET
+    # Issuer signing key: generated on the server by deploy.sh (RSA), not in git.
+    jwks:
+      - key: |
+          {{- fileContent "/data/oidc.key.pem" | nindent 10 }}
+
+    # Per-client authorization: only members of the listed groups may obtain a
+    # token for a given client; everyone else is denied at the provider. Add one
+    # policy block per OIDC client (the cms-auth example ships below).
+    authorization_policies:
+      # Only members of cms-editors may obtain a token for the CMS commit broker
+      # (apps/cms-auth). The broker ALSO checks this group (OIDC_EDITOR_GROUP), so
+      # editing is gated in both places; keep the two group names in sync.
+      cms_auth:
+        default_policy: deny
+        rules:
+          - policy: one_factor
+            subject:
+              - ['group:cms-editors']
+
+    # One entry per OIDC client. The cms-auth broker (apps/cms-auth) ships as the
+    # worked example; add more clients here as you enable OIDC apps. Client
+    # secrets are hashed and loaded from a mounted FILE, not an env var: a pbkdf2
+    # hash contains '$', which Docker Compose interpolates away in env values.
+    clients:
+      # CMS commit broker (apps/cms-auth). Confidential client (has a secret);
+      # the broker reads email + name + groups from userinfo to stamp commit
+      # authorship and enforce the cms-editors gate. PKCE is NOT required (it is a
+      # confidential client and sends no code_challenge; enforcing PKCE would make
+      # Authelia reject the authorize request) and response_mode must be 'query'.
+      - client_id: cms-auth
+        client_name: CMS commit broker
+        client_secret: '{{ secret "/config/secrets/cms-auth.hash" }}'
+        public: false
+        authorization_policy: cms_auth
+        consent_mode: 'implicit'
+        response_modes:
+          - 'query'
+          - 'form_post'
+        redirect_uris:
+          - 'https://cms-auth.{{ env "DOMAIN" }}/callback'
+        scopes:
+          - openid
+          - profile
+          - email
+          - groups
+        userinfo_signed_response_alg: none
