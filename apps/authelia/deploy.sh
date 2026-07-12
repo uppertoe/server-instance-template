@@ -46,6 +46,13 @@ chmod 600 "$users_dir/users_database.yml" apps/authelia/.env apps/authelia/secre
 # restricted mode a sudo/root hand-edit could otherwise leave a file the portal
 # and Authelia can't rewrite. No-op when the deploy user is already uid 1000.
 docker run --rm -v "$PWD/apps/authelia:/m" busybox:latest@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d chown -R 1000:1000 /m/users 2>/dev/null || true
+# The OIDC client-secret hashes are mounted :ro and read by Authelia (uid 1000).
+# A hash auto-seeded from *.example above runs under the (root) deploy wrapper, so
+# the new file is root-owned and mode 600 -- unreadable by uid 1000, which makes
+# Authelia fail to load its whole config (a template `secret` error) and crash the
+# provider. chown them to 1000 too, same as users/ above. Idempotent; no-op when
+# the deploy user is already uid 1000.
+docker run --rm -v "$PWD/apps/authelia:/m" busybox:latest@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d sh -c 'chown 1000:1000 /m/secrets/*.hash' 2>/dev/null || true
 
 # 2. Create the named volumes (this also pulls in the authelia-redis dependency,
 #    creating its volume). Both may crash-loop until the perms/key below exist --
