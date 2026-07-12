@@ -1,0 +1,3 @@
+# Keeps apps/authelia/users/ present in git so the docker-compose bind mount
+# source exists on a fresh checkout. deploy.sh populates users_database.yml here
+# (gitignored -- it holds password hashes). Do not remove.
