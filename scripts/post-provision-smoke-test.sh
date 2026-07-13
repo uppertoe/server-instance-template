@@ -13,6 +13,8 @@ Arguments:
 Options:
   --require-backup   Fail if the backup system is not deployed/configured
   --skip-backup      Skip backup-related checks entirely
+  --strict           Promote monitoring/recovery WARNs to FAILs
+                     (alias: --require-monitoring)
   -h, --help         Show this help
 EOF
 }
@@ -20,6 +22,7 @@ EOF
 HOST_ALIAS="myserver"
 REQUIRE_BACKUP=false
 SKIP_BACKUP=false
+STRICT=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,6 +36,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-backup)
       SKIP_BACKUP=true
+      shift
+      ;;
+    --strict|--require-monitoring)
+      STRICT=true
       shift
       ;;
     --*)
@@ -88,6 +95,36 @@ check_remote() {
     elif [[ -s /tmp/post-provision-smoke.out ]]; then
       sed 's/^/  /' /tmp/post-provision-smoke.out >&2
     fi
+  fi
+}
+
+# Like check_remote, but a failure is a WARN (soft) unless --strict is set, in
+# which case it FAILs. For layers a box can run without but shouldn't in prod
+# (alerting, off-host logs, a recovery bundle).
+check_soft() {
+  local label="$1"
+  local cmd="$2"
+  if remote "$cmd" >/tmp/post-provision-smoke.out 2>/tmp/post-provision-smoke.err; then
+    pass "$label"
+  elif "$STRICT"; then
+    fail "$label"
+    if [[ -s /tmp/post-provision-smoke.err ]]; then
+      sed 's/^/  /' /tmp/post-provision-smoke.err >&2
+    elif [[ -s /tmp/post-provision-smoke.out ]]; then
+      sed 's/^/  /' /tmp/post-provision-smoke.out >&2
+    fi
+  else
+    warn "$label (use --strict to require)"
+  fi
+}
+
+# Emit a bare WARN, or FAIL under --strict, for a message computed inline
+# (used where the check has more than two outcomes, e.g. bundle missing vs stale).
+soft_note() {
+  if "$STRICT"; then
+    fail "$1"
+  else
+    warn "$1 (use --strict to require)"
   fi
 }
 
@@ -217,6 +254,41 @@ if ! "$SKIP_BACKUP"; then
     fi
   fi
 fi
+
+header "Monitoring & Alerting"
+# These layers the roles deploy but the box can technically run without; a prod
+# host should not. WARN by default, FAIL under --strict.
+check_soft "Deadman heartbeat timer is active" "sudo systemctl is-active --quiet vps-deadman.timer"
+check_soft "Deadman heartbeat timer is enabled" "sudo systemctl is-enabled --quiet vps-deadman.timer"
+check_soft "Notify config present and locked down (600)" "sudo test -f /etc/vps-scaffold/notify.env && [[ \$(sudo stat -c '%a' /etc/vps-scaffold/notify.env) == '600' ]]"
+check_soft "Notify channel is configured (ntfy URL/token set)" "sudo grep -qE '^[[:space:]]*(NTFY_URL|NTFY_TOKEN)=.+' /etc/vps-scaffold/notify.env"
+check_soft "Notify self-test timer is active" "sudo systemctl is-active --quiet vps-notify-selftest.timer"
+check_soft "Off-host log export timer is active" "sudo systemctl is-active --quiet log-export.timer"
+check_soft "Off-host log export timer is enabled" "sudo systemctl is-enabled --quiet log-export.timer"
+check_soft "Vulnerability scan timer is active" "sudo systemctl is-active --quiet vuln-scan.timer"
+check_soft "AIDE daily integrity check timer is active" "sudo systemctl is-active --quiet dailyaidecheck.timer"
+check_soft "unattended-upgrades is enabled" "systemctl is-enabled --quiet unattended-upgrades"
+
+header "Recovery bundle"
+# A rebuild needs the not-in-git secrets. make-recovery-bundle.sh drops a
+# timestamp marker on success; flag it missing, or stale when any captured
+# secret (.env / apps/*/.env / restic config) is newer than the last bundle.
+bundle_state="$(remote 'm=/opt/deploy/.recovery-bundle-last; if [ ! -f "$m" ]; then echo MISSING; else n=$( { find /opt/deploy/.env /opt/deploy/apps -type f -name ".env" -newer "$m"; sudo find /etc/restic -type f -name "*.env" -newer "$m"; } 2>/dev/null | head -1 ); [ -n "$n" ] && echo STALE || echo OK; fi' 2>/dev/null || echo ERROR)"
+bundle_when="$(remote 'cat /opt/deploy/.recovery-bundle-last 2>/dev/null' 2>/dev/null || true)"
+case "$bundle_state" in
+  OK)
+    pass "Recovery bundle recorded and current (${bundle_when:-unknown})"
+    ;;
+  STALE)
+    soft_note "Recovery bundle is STALE — a secret changed since it was last made (${bundle_when:-unknown}); re-run 'ssh $HOST_ALIAS \"cd /opt/deploy && sudo scripts/make-recovery-bundle.sh\"'"
+    ;;
+  MISSING)
+    soft_note "No recovery bundle recorded — run 'ssh $HOST_ALIAS \"cd /opt/deploy && sudo scripts/make-recovery-bundle.sh\"' and store it offsite"
+    ;;
+  *)
+    soft_note "Recovery bundle status could not be determined"
+    ;;
+esac
 
 header "Summary"
 echo "Pass: $PASS_COUNT"
