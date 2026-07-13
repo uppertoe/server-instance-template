@@ -14,6 +14,12 @@ permissions:
 jobs:
   analyze:
     name: Analyze Python
+    # CodeQL code scanning needs GitHub Advanced Security on private repos.
+    # Deployments created from this template are private (and typically on the
+    # free plan without GHAS), where this job cannot run and fails on every
+    # push/PR. Gate it to the public template repo so it scans here and is
+    # skipped (neutral, not failed) in every private fork — no per-repo cleanup.
+    if: github.repository == 'uppertoe/server-instance-template'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
