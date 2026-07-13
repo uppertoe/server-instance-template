@@ -103,6 +103,17 @@ ansible_python_interpreter=/usr/bin/python3
 # deploy_admin_public_key="ssh-ed25519 AAAA... admin@laptop"
 # deploy_allowed_app_manage_commands='{"migrate": "python manage.py migrate --noinput"}'
 
+# --- Running site plays ON the box (-c local; the sane path over a slow link) ---
+# deploy_user_public_key / deploy_admin_public_key default to a lookup of the
+# connection key's .pub on the CONTROL node. Run a play ON the box (-c local) and
+# the controller IS the box, where your laptop's key files don't exist -- the
+# deploy-user role fails fast asking you to set them. Pin LITERAL values as HOST
+# vars (an empty deploy_user_public_key would wipe deploy's authorized_keys):
+# myserver ansible_host=YOUR_SERVER_IP deploy_user_public_key="ssh-ed25519 AAAA... deploy@myserver"
+# Detach a long play from your SSH session with `sudo systemd-run` (NOT setsid/
+# nohup -- a non-linger user slice is torn down on logout, killing the job
+# silently). See scaffold/docs/05-access-model.md.
+
 # --- Hands-off updates ----------------------------------------------------
 # Daily CI-gated auto-apply of upstream repo changes (compose/Caddy layer):
 # Renovate automerges digest/submodule bumps on green CI; this timer applies
