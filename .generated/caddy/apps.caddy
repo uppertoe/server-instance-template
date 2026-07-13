@@ -153,6 +153,13 @@ auth.{$DOMAIN} {
         ?Referrer-Policy strict-origin-when-cross-origin
         ?X-Frame-Options DENY
     }
+    @scaffold_static_hashed path_regexp \.[0-9a-f]{8,}\.(?:css|js|mjs|woff2?|ttf|otf|svg|png|jpe?g|webp|avif|gif|ico)$
+    header @scaffold_static_hashed ?Cache-Control "private, max-age=31536000, immutable"
+    @scaffold_static_versioned {
+        query v=*
+        path *.css *.js *.mjs *.woff *.woff2 *.ttf *.otf *.svg *.png *.jpg *.jpeg *.webp *.avif *.gif *.ico
+    }
+    header @scaffold_static_versioned ?Cache-Control "private, max-age=31536000, immutable"
 	# The break-glass token rides in the URL path (/break/<token>). Keep those
 	# requests out of the access log so the live bearer credential is never
 	# written to disk / shipped off-host. (Browser history still holds it -- that
