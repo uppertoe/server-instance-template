@@ -102,6 +102,15 @@ tar -czf - -C "$stage" . \
 chmod 600 "$bundle"
 [[ -n "${SUDO_USER:-}" ]] && chown "$SUDO_USER" "$bundle" 2>/dev/null || true
 
+# Leave a timestamp-only marker in the deploy checkout (NOT the bundle itself,
+# which must go offsite) so the box has evidence a bundle was made. The
+# post-provision smoke test reads this and flags it stale when any captured
+# secret (.env / apps/*/.env / restic config) is newer than the marker — a
+# stale bundle would restore old credentials, a silent failure. Never commit it.
+marker="$ROOT_DIR/.recovery-bundle-last"
+printf '%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(basename "$bundle")" > "$marker" 2>/dev/null || true
+[[ -n "${SUDO_USER:-}" ]] && chown "$SUDO_USER" "$marker" 2>/dev/null || true
+
 echo
 echo "Wrote $bundle"
 echo "Store it OFFSITE (not only on this machine). Verify it decrypts:"

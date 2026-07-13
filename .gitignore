@@ -10,6 +10,9 @@ docker-compose.override.yml
 
 # Encrypted recovery bundles — the crown-jewel archive, never commit.
 recovery-bundle-*.tar.gz.enc
+# Timestamp marker left by make-recovery-bundle.sh (proof-of-bundle, read by the
+# smoke test); box-local state, never committed.
+.recovery-bundle-last
 
 # Backup secrets — never commit real credentials
 backup/config.env
