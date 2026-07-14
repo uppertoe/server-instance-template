@@ -36,6 +36,9 @@ require_file "Caddyfile"
 require_file "Caddyfile.local"
 require_file "docker-compose.override.yml.example"
 require_file "scripts/post-provision-smoke-test.sh"
+require_file "scripts/provision.sh"
+require_file "scripts/restore.sh"
+require_file "scripts/lib/orchestrate.sh"
 require_file "apps/auth/docker-compose.yml"
 require_file "apps/auth/auth.caddy"
 require_file "apps/auth/.env.example"
@@ -55,9 +58,12 @@ require_not_contains "Caddyfile.local" "import /srv/repo/apps/*/*.caddy"
 bash scripts/check-generated-sync.sh
 
 # Repo tooling must at least parse — cheap insurance for the setup helpers.
-for f in scripts/*.sh; do
+# Include scripts/lib/*.sh (the non-recursive scripts/*.sh glob would skip it).
+shopt -s nullglob
+for f in scripts/*.sh scripts/lib/*.sh; do
   bash -n "$f" || fail "bash syntax error in $f"
 done
+shopt -u nullglob
 for f in scripts/*.py; do
   python3 -m py_compile "$f" || fail "python syntax error in $f"
 done
