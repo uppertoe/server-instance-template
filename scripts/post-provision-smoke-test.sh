@@ -80,7 +80,7 @@ warn() {
 
 remote() {
   local cmd="$1"
-  ssh "$HOST_ALIAS" "bash -lc $(printf '%q' "$cmd")"
+  ssh "${SSH_OPTS[@]}" "$HOST_ALIAS" "bash -lc $(printf '%q' "$cmd")"
 }
 
 check_remote() {
@@ -128,8 +128,21 @@ soft_note() {
   fi
 }
 
+# The suite makes ~25 short ssh calls. Reuse ONE connection (ControlMaster) so
+# only the first pays the handshake — otherwise every check pays a full
+# round-trip (seconds each over a distant link), the run drags into minutes, and
+# each fresh connection is another chance to stall. -n keeps a check's ssh off
+# the script's own stdin; BatchMode fails fast instead of blocking on a prompt;
+# ConnectTimeout bounds the initial connect. Socket path stays short for the
+# macOS 104-char AF_UNIX limit.
+SSH_CONTROL="$(mktemp -u /tmp/pps-ssh.XXXXXX)"
+SSH_OPTS=(-n -o BatchMode=yes -o ConnectTimeout=15
+          -o ControlMaster=auto -o ControlPath="$SSH_CONTROL" -o ControlPersist=30s)
+
 cleanup() {
   rm -f /tmp/post-provision-smoke.out /tmp/post-provision-smoke.err
+  # Close the shared master connection (ControlPersist would otherwise linger).
+  [[ -n "${SSH_CONTROL:-}" ]] && ssh -O exit -o ControlPath="$SSH_CONTROL" "$HOST_ALIAS" 2>/dev/null || true
 }
 
 trap cleanup EXIT
@@ -149,7 +162,7 @@ check_remote "SSH login works" "true"
 # Access mode detection (docs/05): connect as deploy in the default model, as
 # admin once deploy_restricted_mode is enabled (deploy then has wrapper-only
 # sudo and the sudo-based checks below need the admin identity).
-REMOTE_USER="$(ssh "$HOST_ALIAS" 'whoami' 2>/dev/null || echo unknown)"
+REMOTE_USER="$(ssh "${SSH_OPTS[@]}" "$HOST_ALIAS" 'whoami' 2>/dev/null || echo unknown)"
 case "$REMOTE_USER" in
   deploy)
     header "Access model: default (unrestricted deploy)"
