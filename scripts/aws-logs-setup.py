@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
+from pathlib import Path
 
 
 RESET = "\033[0m"
@@ -80,6 +82,20 @@ def create_bucket(s3, bucket: str, region: str, retention_days: int, mode: str) 
             s3.put_bucket_versioning(
                 Bucket=bucket, VersioningConfiguration={"Status": "Enabled"}
             )
+            # Object Lock can ONLY be enabled at bucket creation. If this
+            # pre-existing bucket was made without it, the put_object_lock_
+            # configuration below fails with a cryptic InvalidBucketState —
+            # detect it here and fail with an actionable message instead.
+            try:
+                s3.get_object_lock_configuration(Bucket=bucket)
+            except ClientError as lock_exc:
+                if lock_exc.response["Error"]["Code"] == "ObjectLockConfigurationNotFoundError":
+                    sys.exit(
+                        f"Bucket {bucket} already exists WITHOUT Object Lock. Object Lock "
+                        "cannot be added to an existing bucket — choose a new --bucket name "
+                        "(a dedicated *-logs bucket is recommended) or delete and recreate it."
+                    )
+                raise
         else:
             raise
 
@@ -178,6 +194,68 @@ def create_iam_user(iam, username: str, policy_name: str, policy_doc: dict):
     return access_key["AccessKeyId"], access_key["SecretAccessKey"]
 
 
+def update_hosts_file(path: Path, updates: dict) -> None:
+    """Replace/uncomment matching key= lines in an INI inventory, else insert the
+    keys under [servers:vars] (they are group vars). Modelled on
+    aws-backup-setup.py:update_env_file but INI-section aware."""
+    lines = path.read_text().splitlines() if path.exists() else []
+    remaining = dict(updates)
+    result: list[str] = []
+
+    for line in lines:
+        replaced = False
+        for key, value in list(remaining.items()):
+            # Match an active "key=" or a commented "# key=" example line.
+            if re.match(rf"^\s*#?\s*{re.escape(key)}=", line):
+                result.append(f"{key}={value}")
+                remaining.pop(key)
+                replaced = True
+                break
+        if not replaced:
+            result.append(line)
+
+    if remaining:
+        out: list[str] = []
+        inserted = False
+        for line in result:
+            out.append(line)
+            if not inserted and line.strip() == "[servers:vars]":
+                for key, value in remaining.items():
+                    out.append(f"{key}={value}")
+                inserted = True
+        if not inserted:
+            if out and out[-1] != "":
+                out.append("")
+            out.append("[servers:vars]")
+            for key, value in remaining.items():
+                out.append(f"{key}={value}")
+        result = out
+
+    path.write_text("\n".join(result) + "\n")
+
+
+def write_hosts(hosts_path: str, bucket: str, region: str, creds) -> None:
+    section(f"Write host vars into {hosts_path}")
+    if creds is None:
+        warn(
+            "IAM user already has an access key; its secret is unrecoverable from AWS, "
+            f"so {hosts_path} was NOT written. Delete the old key in AWS and re-run to "
+            "mint + write a fresh one, or paste the saved secret by hand."
+        )
+        return
+    access_key_id, secret_access_key = creds
+    update_hosts_file(
+        Path(hosts_path),
+        {
+            "log_export_s3_uri": f"s3://{bucket}/logs",
+            "log_export_aws_access_key_id": access_key_id,
+            "log_export_aws_secret_access_key": secret_access_key,
+            "log_export_aws_region": region,
+        },
+    )
+    ok(f"Wrote log_export_* into {hosts_path}")
+
+
 def print_inventory_snippet(bucket: str, region: str, creds) -> None:
     section("Copy into ansible/hosts (host vars — the inventory is gitignored)")
     print(f"  log_export_s3_uri=s3://{bucket}/logs")
@@ -229,6 +307,16 @@ def parse_args(argv=None):
         default=None,
         help="Inline IAM policy name (defaults to <iam-user>-policy)",
     )
+    parser.add_argument(
+        "--write-hosts",
+        action="store_true",
+        help="Write log_export_* directly into the inventory (default: print for manual paste)",
+    )
+    parser.add_argument(
+        "--hosts-path",
+        default="ansible/hosts",
+        help="Inventory file to update with --write-hosts (default: ansible/hosts)",
+    )
     return parser.parse_args(argv)
 
 
@@ -268,7 +356,10 @@ def main(argv=None) -> int:
     except ClientError as exc:
         sys.exit(f"AWS error: {exc}")
 
-    print_inventory_snippet(args.bucket, args.region, creds)
+    if args.write_hosts:
+        write_hosts(args.hosts_path, args.bucket, args.region, creds)
+    else:
+        print_inventory_snippet(args.bucket, args.region, creds)
 
     print(f"\n{GREEN}Done.{RESET}")
     return 0
