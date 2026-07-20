@@ -17,7 +17,7 @@ services:
     # Multi-arch index digest of ghcr.io/uppertoe/cms-auth:latest (Renovate keeps
     # it current thereafter). Re-pin with:
     #   docker buildx imagetools inspect ghcr.io/uppertoe/cms-auth:latest
-    image: ghcr.io/uppertoe/cms-auth:latest@sha256:6b8d5bfb5c57befdb5030d2502afbab77704d2db4bd90597872b40ef4a3598aa
+    image: ghcr.io/uppertoe/cms-auth:latest@sha256:ba1a6c61c977cae5bcaf44417764b13c0e37ce4f1139ebd197e501ae567c167a
     restart: unless-stopped
     env_file:
       # Deployment-specific values + secrets: ALLOWED_ORIGINS, ALLOWED_REPOS,
