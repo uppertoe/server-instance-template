@@ -17,7 +17,9 @@
 # Authelia: the page then redirects to the same URL with go=1, which is proxied
 # through to the real SPA. A scanner renders the page and runs the JS but does
 # not fill the field, so it never produces go=1 and never consumes the token.
-# See apps/authelia/reset-gate.html.
+# See apps/authelia/static/reset-gate.html. The gate pages are served by Caddy
+# from /srv/authelia-static -- a narrow mount of apps/authelia/static defined in
+# apps/authelia/docker-compose.yml (NOT a whole-repo /srv/repo mount).
 #
 # Access logging is on (JSON to stdout) so reset-endpoint hits can be audited.
 #
@@ -37,7 +39,7 @@ sso.{$DOMAIN} {
 		}
 	}
 	handle @reset_gate {
-		root * /srv/repo/apps/authelia
+		root * /srv/authelia-static
 		rewrite * /reset-gate.html
 		file_server
 	}
@@ -48,7 +50,7 @@ sso.{$DOMAIN} {
 	# trigger the DELETE. Self-service revoke is dropped; the token expires anyway.
 	@revoke path /revoke/reset-password /revoke/reset-password/*
 	handle @revoke {
-		root * /srv/repo/apps/authelia
+		root * /srv/authelia-static
 		rewrite * /revoke-info.html
 		file_server
 	}
