@@ -357,7 +357,7 @@ pack. Not run from CI by design — it needs your admin credentials.
 
 ### Supply-chain digest currency
 
-Every compose image is pinned by digest (CI's `image-pins` job enforces it).
+Every compose image is pinned by digest (CI's `static-checks` job enforces it).
 Currency has two layers: the weekly **Digest Freshness** workflow compares
 each pin to the registry's current digest and opens an issue on drift
 (`bash scripts/check-digest-freshness.sh` runs the same check locally), and —

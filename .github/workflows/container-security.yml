@@ -1,0 +1,65 @@
+name: Container Security
+
+# Image CVE + compose misconfig scans, pulled out of the per-commit CI: the
+# results only change when something under apps/ changes, so scanning on every
+# push burned ~4 billed minutes for identical output. Runs when apps/ changes,
+# weekly (new CVEs land against unchanged pins), and on demand.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/**"
+      - ".github/workflows/container-security.yml"
+  pull_request:
+    paths:
+      - "apps/**"
+      - ".github/workflows/container-security.yml"
+  schedule:
+    - cron: "37 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  container-security:
+    name: App image and compose scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Prepare reports directory
+        run: mkdir -p reports/container-security
+
+      # Image CVE scan of every app image — report-only so an unfixable upstream
+      # CVE does not block deploys. Findings surface in the artifact and summary.
+      - name: Trivy image scan (app images)
+        run: |
+          images="$(grep -rhoE 'image:\s*\S+' apps/*/docker-compose.yml | awk '{print $2}' | sort -u)"
+          for img in $images; do
+            safe="$(echo "$img" | tr '/:@' '___')"
+            docker run --rm -v "$PWD/reports/container-security:/out" aquasec/trivy:latest@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f image \
+              --severity HIGH,CRITICAL --no-progress --format table \
+              --output "/out/trivy-${safe}.txt" "$img" || true
+            echo "### Trivy ${img}" >> "$GITHUB_STEP_SUMMARY"
+            tail -n 30 "reports/container-security/trivy-${safe}.txt" >> "$GITHUB_STEP_SUMMARY" || true
+          done
+
+      # Static compose misconfig lint of every app. Fails on HIGH. Excluded query
+      # IDs are the accepted public-reverse-proxy exceptions documented in
+      # scaffold/docs/08-security-model.md.
+      - name: KICS compose scan (apps)
+        run: |
+          docker run --rm -v "$PWD/apps:/path" -v "$PWD/reports/container-security:/out" \
+            checkmarx/kics:latest@sha256:3e5a268eb8adda2e5a483c9359ddfc4cd520ab856a7076dc0b1d8784a37e2602 scan -p /path --type DockerCompose \
+            --exclude-queries 8c978947-0ff6-485c-b0c2-0bfca6026466,bc2908f3-f73c-40a9-8793-c1b7d5544f79,451d79dc-0588-476a-ad03-3c7f0320abb3,ce76b7d0-9e77-464d-b86f-c5c48e03e22d \
+            --report-formats json --output-name kics-apps -o /out --fail-on high
+
+      - name: Upload container security reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: container-security-reports
+          path: reports/container-security

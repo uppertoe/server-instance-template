@@ -75,9 +75,10 @@ Inventory lives in `ansible/hosts` (gitignored; copy `ansible/hosts.example`).
   `cap_drop: [ALL]` (+ minimal `cap_add`), `security_opt: [no-new-privileges:true]`,
   `read_only: true` + `tmpfs`/named volumes, `mem_limit`, `pids_limit`, `healthcheck`.
   Copy the pattern from `apps/auth/` or `docker/caddy.base.yml`. `audit-compose.yml`
-  and CI (`forward-auth-security`, `compose-smoke`, `container-security`) enforce it.
+  and CI (`static-checks`, `compose-smoke`) plus the path-triggered
+  `container-security` workflow enforce it.
 - **Every image is pinned by digest** (`image: repo:tag@sha256:…`) — including the
-  bundled `apps/auth` and `apps/ntfy`. CI's `image-pins` job
+  bundled `apps/auth` and `apps/ntfy`. CI's `static-checks` job
   (`scripts/check-image-pins.sh`) fails on any unpinned image; Renovate
   (`renovate.json5`, `pinDigests`) keeps the digests current via PR. Your own
   images skip the 3-day third-party cooldown — add each to the FIRST-PARTY list
@@ -112,6 +113,6 @@ Inventory lives in `ansible/hosts` (gitignored; copy `ansible/hosts.example`).
   See `scaffold/docs/04-server-repo.md`.
 - Host hardening / benchmark / audit changes belong in **`vps-base-template`**, not
   here — then bump the `scaffold` submodule.
-- Keep CI green: `compose-smoke`, `forward-auth-security`, `container-security`,
-  `template-consistency`.
+- Keep CI green: `static-checks`, `compose-smoke`, and (when `apps/**` changes)
+  the `container-security` workflow.
 - Commit/push only when asked; this repo's default branch is `main`.
