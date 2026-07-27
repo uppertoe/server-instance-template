@@ -16,6 +16,13 @@ permissions: read-all
 jobs:
   analysis:
     name: Scorecard analysis
+    # Scorecard uploads SARIF to the code-scanning tab, which needs GitHub
+    # Advanced Security on private repos. Deployments created from this
+    # template are private free-plan repos where that upload fails on every
+    # push — billing minutes to produce a red X. Gate it to the public
+    # template repo, mirroring the CodeQL gate: it scans here and is skipped
+    # (neutral, not failed) in every private fork — no per-repo cleanup.
+    if: github.repository == 'uppertoe/server-instance-template'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
