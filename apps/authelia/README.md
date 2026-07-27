@@ -98,16 +98,17 @@ therefore dead for every `@rch.org.au` mailbox, and there is no Authelia setting
 mail-filter exemption available to us that fixes it.
 
 The defence lives in [`authelia.caddy`](authelia.caddy): Caddy intercepts the reset
-and revoke links and serves **static gate pages** ([`reset-gate.html`](reset-gate.html),
-[`revoke-info.html`](revoke-info.html)) instead of Authelia's SPA — so Authelia's
+and revoke links and serves **static gate pages** ([`reset-gate.html`](static/reset-gate.html),
+[`revoke-info.html`](static/revoke-info.html)) instead of Authelia's SPA — so Authelia's
 auto-consuming JS never loads for whoever opens the bare link. The reset gate asks the
-user to type their email and click Continue, which redirects to
+user to click a single Continue button, which redirects to
 `…/reset-password/step2?token=…&go=1`; **only requests carrying `go=1` are proxied
-through to the real Authelia reset**. A scanner renders the gate and runs its JS but
-won't fill the field, so it never produces `go=1` and never reaches a consuming
-endpoint — it dead-ends on a static page. A human types their email and proceeds
-normally. Verified end-to-end against the live scanner: it hit both gate pages and
-reached **no** consuming endpoint; the token survived.
+through to the real Authelia reset**. A scanner that GET/HEAD-prefetches or renders the
+gate and runs its JS won't click, so it never produces `go=1` and never reaches a
+consuming endpoint — it dead-ends on a static page (an `event.isTrusted` check
+additionally drops synthetic auto-clicks). A human clicks and proceeds normally.
+Verified end-to-end against the live scanner: it hit both gate pages and reached **no**
+consuming endpoint; the token survived.
 
 Limits worth knowing:
 - The gate only checks the field is non-empty and email-shaped — it's a "make a human

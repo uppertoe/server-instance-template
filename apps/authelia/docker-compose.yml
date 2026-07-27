@@ -111,6 +111,15 @@ services:
       retries: 5
       start_period: 5s
 
+  # authelia.caddy file_servers the reset-flow interstitials (static/reset-gate.html
+  # / static/revoke-info.html -- the Safe Links defence). This narrow read-only
+  # mount is their source in the proxy (same mechanism as apps/planka), NOT a
+  # whole-repo /srv/repo mount. Only the non-secret static/ dir is exposed to
+  # Caddy -- never the app dir, which holds .env / secrets.
+  caddy:
+    volumes:
+      - ./static:/srv/authelia-static:ro
+
 volumes:
   authelia_data:
   authelia_redis_data:

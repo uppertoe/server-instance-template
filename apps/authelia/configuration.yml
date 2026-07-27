@@ -24,8 +24,8 @@ log:
 # --- Who can sign in: the admin-maintained file backend ---
 authentication_backend:
   # Self-service password reset is ENABLED, but protected from Defender Safe Links
-  # by a Caddy-served interstitial (apps/authelia/reset-gate.html) -- the bare
-  # reset link serves a human gate, and only a typed-email submission reaches this
+  # by a Caddy-served interstitial (apps/authelia/static/reset-gate.html) -- the bare
+  # reset link serves a human gate, and only a genuine button click reaches this
   # flow, so the scanner can't consume the token. See apps/authelia/authelia.caddy.
   # Passwords can still be admin-set (edit users_database.yml + restart Authelia).
   password_reset:

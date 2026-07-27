@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Reset your password</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:#f4f5f7; margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; }
+  .card { background:#fff; padding:2rem 2.25rem; border-radius:12px; box-shadow:0 4px 24px rgba(0,0,0,.08); width:100%; max-width:360px; }
+  h1 { font-size:1.25rem; margin:0 0 .5rem; color:#111827; }
+  p { color:#4b5563; font-size:.92rem; line-height:1.45; margin:0 0 1.25rem; }
+  button { width:100%; padding:.7rem; font-size:1rem; font-weight:600; color:#fff; background:#2563eb; border:none; border-radius:8px; cursor:pointer; }
+  button:hover { background:#1d4ed8; }
+  button:disabled { background:#9ca3af; cursor:default; }
+  .err { color:#b91c1c; font-size:.85rem; margin-top:.6rem; min-height:1.1em; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Reset your password</h1>
+    <p>To continue, click the button below. This quick step stops the reset link from being opened automatically by email security software.</p>
+    <button id="go" type="button">Continue to reset my password</button>
+    <div class="err" id="err"></div>
+  </div>
+  <script>
+    // Nothing happens on load, and there is no <a href> for a crawler to follow.
+    // The hand-off to Authelia's real reset page (?go=1, which is the step that
+    // consumes the token) fires ONLY from a genuine user click. A scanner that
+    // GET/HEAD-prefetches this URL just gets this static page (the token is not
+    // touched); a scanner that renders and runs the JS still does not click, so
+    // it never reaches ?go=1. The event.isTrusted guard is a cheap extra: it
+    // rejects a synthetic element.click() from an auto-clicking scanner (not a
+    // hard boundary -- it is forgeable by real-browser automation -- but Safe
+    // Links is a fetch/detonation scanner, not an input-injecting one).
+    (function () {
+      var token = new URLSearchParams(window.location.search).get('token') || '';
+      var btn = document.getElementById('go');
+      var err = document.getElementById('err');
+      if (!token) { btn.disabled = true; err.textContent = 'This link is missing its reset token.'; return; }
+      btn.addEventListener('click', function (e) {
+        if (!e.isTrusted) return; // ignore programmatic/synthetic clicks
+        window.location.href = '/reset-password/step2?token=' + encodeURIComponent(token) + '&go=1';
+      });
+    })();
+  </script>
+</body>
+</html>
