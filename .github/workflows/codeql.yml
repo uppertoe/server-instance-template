@@ -28,10 +28,10 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@e60ea984bd3baa95954f2856bcf24f9eaba46637 # v3
+        uses: github/codeql-action/init@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3
         with:
           languages: python
           config-file: ./.github/codeql/codeql-config.yml
 
       - name: Analyze
-        uses: github/codeql-action/analyze@e60ea984bd3baa95954f2856bcf24f9eaba46637 # v3
+        uses: github/codeql-action/analyze@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3
