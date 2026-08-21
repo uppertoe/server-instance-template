@@ -85,3 +85,25 @@ and RTO entry within 2 weeks.
 Tabletop the worst plausible scenario for the current app set (today:
 credential theft → repo-to-root attempt; at commissioning: class D on the
 highest-BIL app). Record date, participants, gaps, fixes here.
+
+## Test record — 2026-07-06 (desk-check / walkthrough)
+
+Type: read-only walkthrough against the live staging host (not a live-fire
+containment). Operator: repo owner. Verified every runbook step resolves to a
+real command/path/unit on the current system:
+
+- **Detection**: `vps-deadman.timer` and `vps-container-watch.timer` active;
+  deadman firing on schedule (journal confirms). Alert chain live.
+- **Containment**: `auto-deploy.timer` is the correct unit name for the freeze
+  step (verified enabled). `ufw insert 1 allow from <ip>` pattern confirmed
+  compatible — fail2ban already manages ufw via inserted REJECT rules.
+- **Evidence**: `/var/log/audit`, `/var/lib/vuln-scan`, `/var/lib/aide`,
+  `/opt/deploy` all present; `journalctl -o export` works; `caddy_logs`
+  volume present (holds the per-user access trail).
+- **Recovery**: recovery bundle created and verified decryptable same day
+  (see access-review log); rebuild procedure is docs/09 (RTO log still
+  pending a live drill).
+
+Gaps found: none in the procedure. Open action: run one *live* rebuild drill
+to populate the RTO log — the only IR step not yet exercised end-to-end.
+Next tabletop: within 12 months, or at commissioning if scope changes.
