@@ -13,6 +13,18 @@ current after any rotation.
 
 ---
 
+## 2026-07-06 — recovery bundle created
+
+- **Recovery bundle**: `recovery-bundle-rch-vps-20260706.tar.gz.enc` created
+  (ansible/hosts + backup/config.env + backup/services/env-files.env),
+  AES-256/PBKDF2, verified decryptable. Key stored separately (password
+  manager); bundle to be stored offsite. Resolves the carried action item.
+- **File hygiene**: `ansible/hosts` tightened 0644 → 0600.
+- Still open: enable branch protection was completed via API this session;
+  first live rebuild drill still pending.
+
+Reviewed by: repo owner.
+
 ## 2026-07-05 — initial entry
 
 - **SSH:** `deploy` and `admin` each hold the single operator ed25519 key;
