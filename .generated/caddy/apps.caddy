@@ -144,7 +144,14 @@ auth.{$DOMAIN} {
             roll_keep 12
             roll_keep_for 2160h
         }
-        format json
+        format filter {
+            wrap json
+            fields {
+                request>uri regexp ([/=])[A-Za-z0-9_-]{16,}([/?&]|$) ${1}REDACTED${2}
+                request>headers>Referer regexp ([/=])[A-Za-z0-9_-]{16,}([/?&]|$) ${1}REDACTED${2}
+                request>headers>Hx-Current-Url regexp ([/=])[A-Za-z0-9_-]{16,}([/?&]|$) ${1}REDACTED${2}
+            }
+        }
     }
     log_append user {http.request.header.Remote-User}
     header {
