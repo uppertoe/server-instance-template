@@ -3,7 +3,7 @@ services:
     # Pinned by digest (supply-chain control; CI's image-pins job enforces it;
     # the weekly digest-freshness workflow flags drift). The image is distroless
     # and already runs as the nonroot user (65532). See scaffold/docs/08-security-model.md.
-    image: ghcr.io/uppertoe/vps-scaffold-auth:latest@sha256:f425b2310e05234c0b2aeb4cd101ff4437dc1f75f3e2000cb1e3bee47413adaa
+    image: ghcr.io/uppertoe/vps-scaffold-auth:latest@sha256:acc9149e7380c868fe66fddf39bcb4159cb0f015b423699f1fc3bedf94a34755
     restart: unless-stopped
     # CIS Docker §5 runtime hardening. The auth binary needs no extra capabilities
     # and binds only an internal port behind Caddy.
