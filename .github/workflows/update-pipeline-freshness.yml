@@ -27,6 +27,9 @@ permissions:
 jobs:
   update-pipeline-freshness:
     name: Verify pipeline state vs record
+    # The template has no fleet app secrets and no servers of its own to
+    # verify, so the check only means something in a stamped instance.
+    if: github.repository != 'uppertoe/server-instance-template'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
