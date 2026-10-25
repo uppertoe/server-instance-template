@@ -17,6 +17,9 @@ permissions:
 jobs:
   digest-freshness:
     name: Compare pinned digests to registry
+    # The template's pins are examples that no server runs; Renovate PRs keep
+    # them current, and the check only means something in a stamped instance.
+    if: github.repository != 'uppertoe/server-instance-template'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
