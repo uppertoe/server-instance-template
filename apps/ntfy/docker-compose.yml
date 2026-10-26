@@ -4,7 +4,7 @@ services:
   # user/cache DBs on a first provision (long-lived hosts never noticed:
   # their volumes predate the non-root hardening). Same pattern as caddy-init.
   ntfy-init:
-    image: binwiederhier/ntfy:latest@sha256:cfbbb1bac9196cb711e29ef0ac4adaeb033be6235f1df857705dc39c14384a1d
+    image: binwiederhier/ntfy:v2.34.0@sha256:901e14503d3f605f445be0e68f2ac71f0aa73391897ce6ceb599f8c48d8b3792
     restart: "no"
     user: "0:0"
     cap_drop:
@@ -29,7 +29,7 @@ services:
   ntfy:
     # Pinned by digest (supply-chain control; CI's image-pins job enforces it;
     # the weekly digest-freshness workflow flags drift).
-    image: binwiederhier/ntfy:latest@sha256:cfbbb1bac9196cb711e29ef0ac4adaeb033be6235f1df857705dc39c14384a1d
+    image: binwiederhier/ntfy:v2.34.0@sha256:901e14503d3f605f445be0e68f2ac71f0aa73391897ce6ceb599f8c48d8b3792
     depends_on:
       ntfy-init:
         condition: service_completed_successfully
