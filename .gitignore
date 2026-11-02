@@ -25,5 +25,7 @@ __pycache__/
 # Security audit reports (regenerable; can be large).
 reports/
 
-# Instance-specific compliance evidence — never in the public template
+# --- lines below are this server's own ---
+# Instance-specific compliance evidence: a private server repo tracks its
+# filled compliance/ pack (remove this rule there); the public template never does.
 compliance/
