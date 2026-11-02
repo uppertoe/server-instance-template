@@ -248,25 +248,19 @@ dashboard.{$DOMAIN} {
 Full details, the admin TOTP option, and a local end-to-end test are in
 [scaffold/docs/07-auth.md](https://github.com/uppertoe/vps-base-template/blob/main/docs/07-auth.md).
 
-### SSO + CMS (Authelia + Decap), optional
+### CMS commit broker (cms-auth), optional
 
-Two paired apps ship **off by default** for running a Git-based CMS whose editors
-have **no GitHub accounts**:
+`apps/cms-auth` ships **off by default**. It lets [Decap CMS](https://decapcms.org/)
+editors who have **no GitHub accounts** commit through **one shared GitHub App**,
+with each commit **authored as the signed-in editor** (the App key stays
+server-side, never in the browser). Editors sign in through the `apps/auth`
+gateway above and must hold the `cms-editors` group.
 
-- **`apps/authelia`** — an OpenID Connect provider (`sso.<domain>`), separate from
-  the `apps/auth` gateway above. This is the login for editors.
-- **`apps/cms-auth`** — a broker that lets [Decap CMS](https://decapcms.org/) commit
-  through **one shared GitHub App**, with each commit **authored as the signed-in
-  editor** (the App key stays server-side, never in the browser).
-
-**Enable:** turn on `apps/authelia` (set its `AUTHELIA_*` secrets, rename
-`authelia.caddy.disabled` → `authelia.caddy`, uncomment its include), then run
-`bash apps/cms-auth/setup.sh` — it mints the OIDC client secret, assembles the
-`.env`, base64s the GitHub App key, and renders Caddy; you click through the App
-creation and add editors to the `cms-editors` group. Point your CMS site's Decap
-`config.yml` at `base_url` + `api_root: https://cms-auth.<domain>/api`. See
-[`apps/cms-auth/README.md`](apps/cms-auth/README.md) and
-[`apps/authelia/README.md`](apps/authelia/README.md).
+**Enable:** turn on `apps/auth` first, then run `bash apps/cms-auth/setup.sh`,
+which assembles the `.env`, base64s the GitHub App key and renders Caddy; rename
+`cms-auth.caddy.disabled` to `cms-auth.caddy` and uncomment its include. Point
+your CMS site's Decap `config.yml` at `base_url` + `api_root:
+https://cms-auth.<domain>/api`. See [`apps/cms-auth/README.md`](apps/cms-auth/README.md).
 
 ---
 
@@ -357,7 +351,7 @@ pack. Not run from CI by design — it needs your admin credentials.
 
 ### Supply-chain digest currency
 
-Every compose image is pinned by digest (CI's `image-pins` job enforces it).
+Every compose image is pinned by digest (CI's `static-checks` job enforces it).
 Currency has two layers: the weekly **Digest Freshness** workflow compares
 each pin to the registry's current digest and opens an issue on drift
 (`bash scripts/check-digest-freshness.sh` runs the same check locally), and —
@@ -450,12 +444,18 @@ docker compose exec caddy caddy trust   # once per machine — adds CA to keycha
 
 ## Security auditing
 
-**Compliance pack:** `docs/compliance-pack/` is a filled worked example of the
-scaffold's evidence templates (SSP, asset register, scope determination,
-jurisdiction record, retention design, IR runbook, access-review log, control
-matrix) for this template's staging instance. For a real deployment, re-answer
-the scope determination first, then re-fill the `⟨fill at commissioning⟩`
-fields — see its README.
+**Compliance pack:** the evidence templates (SSP, asset register, scope
+determination, jurisdiction record, retention design, IR runbook, control
+matrix) are the scaffold's one set, `scaffold/docs/templates/`. A server repo
+copies them to `compliance/`, answers the scope determination first, then fills
+the `⟨fill at commissioning⟩` fields; a private server repo tracks the filled
+pack (remove the `compliance/` rule from `.gitignore` there).
+
+**Shared tooling:** the checks under `scripts/` are shims for the scaffold's
+copies, and the CI workflows call the scaffold's reusable workflows at the
+submodule commit; `bash scripts/check-server-files.sh` keeps both in step and
+`.scaffold-server.yml` holds this server's choices. See
+[scaffold/docs/14-server-tooling.md](https://github.com/uppertoe/vps-base-template/blob/main/docs/14-server-tooling.md).
 
 Run against a real provisioned VPS (not locally):
 

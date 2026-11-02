@@ -3,15 +3,15 @@
 #   bash apps/cms-auth/setup.sh
 #
 # Automates everything machine-doable when enabling the CMS on a server:
-#   - mints the Authelia OIDC client secret + writes its hash and the plaintext;
-#   - generates SESSION_SECRET;
+#   - generates SESSION_SECRET, and the gateway secret (root .env) that Caddy
+#     injects and the broker checks;
 #   - assembles apps/cms-auth/.env (mode 600) from your answers;
 #   - base64-encodes the GitHub App private key into the .env;
 #   - re-renders the Caddy bundle.
 #
 # The two steps that inherently need GitHub's UI (creating + installing the App)
-# are reduced to opening ONE pre-filled URL and pasting back three values. Wire
-# your editors into the cms-editors Authelia group afterwards (printed at the end).
+# are reduced to opening ONE pre-filled URL and pasting back three values. Put
+# your editors in the cms-editors gateway group afterwards (printed at the end).
 #
 # Idempotent: existing .env values are shown and kept unless you overwrite them.
 set -euo pipefail
@@ -19,7 +19,6 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 app=apps/cms-auth
 env_file="$app/.env"
-hash_file=apps/authelia/secrets/cms-auth.hash
 
 say()  { printf '\n\033[1m%s\033[0m\n' "$*"; }
 ask()  { local p="$1" d="${2:-}" a; if [ -n "$d" ]; then read -rp "$p [$d]: " a; echo "${a:-$d}"; else read -rp "$p: " a; echo "$a"; fi; }
@@ -36,8 +35,6 @@ set_env() {
   fi
   printf '%s=%s\n' "$key" "$val" >>"$env_file"
 }
-
-command -v docker >/dev/null || { echo "docker is required (to mint the Authelia secret)"; exit 1; }
 
 domain="$(grep -oE '^DOMAIN=.*' .env 2>/dev/null | head -1 | cut -d= -f2- || true)"
 [ -n "$domain" ] || domain="$(ask 'DOMAIN (e.g. example.org)')"
@@ -74,27 +71,20 @@ say "3/6  Allowed origins (CMS admin-page origins, comma-separated)"
 default_origin="https://handbook.${domain}"
 origins="$(ask 'ALLOWED_ORIGINS' "$default_origin")"
 
-say "4/6  Minting the Authelia OIDC client secret"
-# Random Password -> app .env (OIDC_CLIENT_SECRET); Digest -> Authelia hash file.
-mint="$(docker compose run --rm authelia \
-  authelia crypto hash generate pbkdf2 --variant sha512 --random --random.length 72 2>/dev/null)"
-oidc_secret="$(printf '%s\n' "$mint" | awk -F': *' '/Random Password/{print $2}')"
-oidc_digest="$(printf '%s\n' "$mint" | awk -F': *' '/Digest/{print $2}')"
-if [ -z "$oidc_secret" ] || [ -z "$oidc_digest" ]; then
-  echo "Could not parse the Authelia secret output:"; printf '%s\n' "$mint"; exit 1
+say "4/6  Gateway secret (root .env, shared by Caddy and the broker)"
+if grep -qE '^CMS_AUTH_GATEWAY_SECRET=.{32,}' .env 2>/dev/null; then
+  echo "  kept the existing CMS_AUTH_GATEWAY_SECRET"
+else
+  grep -vE '^CMS_AUTH_GATEWAY_SECRET=' .env >.env.tmp 2>/dev/null || true
+  printf 'CMS_AUTH_GATEWAY_SECRET=%s\n' "$(openssl rand -hex 32)" >>.env.tmp
+  mv .env.tmp .env
+  chmod 600 .env
+  echo "  wrote CMS_AUTH_GATEWAY_SECRET to .env"
 fi
-printf '%s\n' "$oidc_digest" >"$hash_file"
-chmod 600 "$hash_file"
-# Authelia reads this mounted :ro as uid 1000; if setup ran as root the file
-# would be root-owned and unreadable, crashing the provider. chown best-effort
-# (no-op / harmless when already uid 1000).
-chown 1000:1000 "$hash_file" 2>/dev/null || true
-echo "  wrote $hash_file"
 
 say "5/6  Writing $env_file"
 set_env ALLOWED_ORIGINS "$origins"
 set_env ALLOWED_REPOS "$repos"
-set_env OIDC_CLIENT_SECRET "$oidc_secret"
 set_env GITHUB_APP_ID "$app_id"
 set_env GITHUB_APP_INSTALLATION_ID "$install_id"
 set_env GITHUB_APP_PRIVATE_KEY_B64 "$key_b64"
@@ -111,9 +101,9 @@ echo "  .generated/caddy updated"
 cat <<EOF
 
 Done. Remaining manual step (people, not machines):
-  * Put each editor in the 'cms-editors' group in apps/authelia/users/ (or via
-    the invite portal). Only they can sign in to the CMS.
+  * Put each editor in the 'cms-editors' group on the gateway's admin Groups
+    page. Only they can sign in to the CMS.
 
-Then commit the tracked changes (apps/cms-auth, apps/authelia, .generated) and
-deploy. The .env and secrets/*.hash stay on the server (gitignored).
+Then commit the tracked changes (apps/cms-auth, .generated) and deploy. The
+.env files stay on the server (gitignored).
 EOF
