@@ -31,5 +31,5 @@ permissions:
 
 jobs:
   container-security:
-    uses: uppertoe/vps-base-template/.github/workflows/server-container-security.yml@91a3e5febec1f5da5f394488f5575b91c10b928e
+    uses: uppertoe/vps-base-template/.github/workflows/server-container-security.yml@f7c9dea7dad7b397a7263071754489439efedf90
     secrets: inherit
