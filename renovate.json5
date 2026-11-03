@@ -83,6 +83,16 @@
       "description": "Scaffold submodule bumps: automerge once repo CI proves the merged stack boots",
       "matchManagers": ["git-submodules"],
       "automerge": true,
+      // A pointer bump moves only the submodule. Three workflow callers embed
+      // the scaffold commit and the shims must match the canonical copies, so
+      // the drift check (scripts/check-server-files.sh) would fail the bump.
+      // Run its fix mode in the branch so the PR carries the rewritten files;
+      // the command is allowlisted in the fleet runner's config.js.
+      "postUpgradeTasks": {
+        "commands": ["bash scripts/check-server-files.sh --fix"],
+        "fileFilters": ["**/*"],
+        "executionMode": "branch",
+      },
     },
     {
       "description": "Automerge action pin/digest updates immediately",
