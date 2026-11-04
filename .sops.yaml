@@ -1,0 +1,24 @@
+# SOPS recipients for this server's secrets (scaffold/docs/13-secrets.md and
+# secrets/README.md). Public keys only: no private key is ever placed in a
+# repository. Each file under secrets/ is encrypted to every key on its rule,
+# and any one of those keys can decrypt it.
+#
+#   server    this server's own key. The first site play creates it and prints
+#             the public half, which is also kept in /etc/vps-scaffold/age/key.pub.
+#   owner     the owner's laptop key (~/.config/sops/age/keys.txt).
+#   recovery  the offline recovery key, held in the password manager and never
+#             on a computer in daily use.
+#
+# Replace each placeholder below with the matching public key (age1...).
+# secrets/recovery.sops holds the inventory and is never rendered on the
+# server, so the server key is not one of its recipients.
+creation_rules:
+  - path_regex: ^secrets/recovery\.sops$
+    age: >-
+      <owner public key>,
+      <recovery public key>
+  - path_regex: ^secrets/.*\.sops$
+    age: >-
+      <server public key>,
+      <owner public key>,
+      <recovery public key>

@@ -5,6 +5,12 @@
 #
 # Activates once DOMAIN points at this host with DNS for ntfy.<domain>. Until
 # then, on-box publishing still works via 127.0.0.1:8080 -- see docker-compose.
+# scaffold-lint: public -- ntfy enforces its own token auth, and forward_auth would break its streaming
 ntfy.{$DOMAIN} {
-	reverse_proxy ntfy:8080
+	# A public site has no guard to strip the gateway session cookie; drop the
+	# estate-wide cookie and any client-sent Remote-* headers before they reach
+	# the container (see strip_public in apps/auth/auth.caddy).
+	reverse_proxy ntfy:8080 {
+		import strip_public
+	}
 }

@@ -4,8 +4,10 @@
 
 > Replace this heading with your server name and delete this line.
 
-VPS implementation for `[name]`. Uses [vps-base-template](https://github.com/uppertoe/vps-base-template)
-for infrastructure — Ansible provisioning, hardening, Docker setup, and Caddy base config.
+VPS implementation for `[name]`. It uses [vps-base-template](https://github.com/uppertoe/vps-base-template)
+for the infrastructure: Ansible provisioning and hardening, Docker, the Caddy
+base configuration, the deploy wrapper and the shared CI. That scaffold is the
+`scaffold/` submodule, and its `docs/` directory is the reference manual.
 
 ---
 
@@ -14,133 +16,110 @@ for infrastructure — Ansible provisioning, hardening, Docker setup, and Caddy 
 Do this once per server.
 
 1. On GitHub, open [server-instance-template](https://github.com/uppertoe/server-instance-template)
-   and click **Use this template → Create a new repository**.
-2. Name it `server-[name]` (e.g. `server-mycompany`). Keep it **private**.
-3. Clone it locally — the `scaffold` submodule is included automatically:
+   and choose **Use this template**, then **Create a new repository**. Name it
+   `server-[name]` and keep it private.
+2. Clone it with the submodule:
    ```bash
    git clone --recurse-submodules git@github.com:yourorg/server-[name].git
    cd server-[name]
    ```
-4. Edit the repo name in this README, then commit:
-   ```bash
-   git add README.md && git commit -m "chore: name server repo"
-   git push
-   ```
-
-That's it — your server repo is ready. Continue below to provision the server.
+   The submodule URL is `https://`, so the server can fetch the scaffold with
+   a deploy key that is scoped to this repository alone.
+3. Put the server name in this README, sign the commit and push. Every commit
+   to this repository should be signed, because the server can be told to
+   refuse an unsigned one (`deploy_verify_signature` below).
 
 ---
 
 ## Provision a new server
 
-Run these **from your local machine** — Ansible SSHs into the VPS on your behalf.
+Everything runs from your laptop. Create the VPS (Ubuntu 24.04 LTS) and note
+its address, then:
 
-```bash
-# 1. Add the server to your local SSH config (~/.ssh/config)
-#    Replace "myserver" with your own alias.
-#    Use that same alias in ~/.ssh/config, ansible/hosts, and the smoke test.
-cat >> ~/.ssh/config <<'EOF'
+1. Add an entry for the server to `~/.ssh/config`, with `User deploy` and the
+   key you want installed for the deploy account. Use the same alias in
+   `ansible/hosts` and in every command below.
+2. Copy and edit the inventory: `cp ansible/hosts.example ansible/hosts`.
+   The example documents every variable, including alerting, log export,
+   signed deploys and restricted mode.
+3. Run the orchestrator:
+   ```bash
+   ansible-galaxy collection install -r scaffold/ansible/requirements.yml   # once per machine
+   scripts/provision.sh --dry-run myserver   # preview each stage
+   scripts/provision.sh myserver
+   ```
+   It chains bootstrap, hardening, the AWS buckets (with the `--aws-*`
+   options), backups, the first deploy, alerting and the strict smoke test,
+   and a re-run skips the stages that are done. It prompts for the root
+   credential on the first bootstrap only. The manual step-by-step, and what
+   each stage does, is `scaffold/docs/03-provisioning-a-server.md`.
+4. Reboot once so the new kernel is active, then run the smoke test again:
+   ```bash
+   ssh myserver sudo reboot
+   bash scripts/post-provision-smoke-test.sh myserver --require-backup --strict
+   ```
 
-Host myserver
-    HostName YOUR_SERVER_IP
-    User deploy
-    # Use whichever SSH key you want bootstrap to install for deploy.
-    IdentityFile ~/.ssh/id_ed25519
-EOF
+### Secrets
 
-# 2. Configure inventory and environment
-#    Replace "myserver" in ansible/hosts too.
-#    Keep ansible_ssh_private_key_file aligned with the same key.
-#    Bootstrap will install the matching .pub onto the server.
-cp ansible/hosts.example ansible/hosts && $EDITOR ansible/hosts
-cp .env.example .env && $EDITOR .env
+Secrets never sit in plaintext in this repository and are never edited on the
+server. They live under `secrets/`, encrypted with SOPS to three age keys: the
+server's own key, your laptop key and an offline recovery key. The first site
+play creates the server key and prints its public half. Put the three public
+keys into `.sops.yaml`, then write each secret file with
+`sops --input-type dotenv --output-type dotenv secrets/apps/<app>/.env.sops`
+and commit it. The deploy decrypts them on the box into the `.env` files
+Compose reads. `secrets/README.md` has the key steps; the design is
+`scaffold/docs/13-secrets.md`.
 
-# 3. Install Ansible dependencies (once per machine)
-ansible-galaxy collection install -r scaffold/ansible/requirements.yml
+### Restricted mode on the release tree
 
-# 4. Bootstrap — run once as root on a fresh VPS
-#    Most providers give you a root password — --ask-pass makes Ansible prompt for it.
-#    If your provider gave you a root SSH key instead, omit --ask-pass.
-ansible-playbook -i ansible/hosts scaffold/ansible/bootstrap.yml --ask-pass
+Once the server deploys cleanly, take the deploy account's root-equivalence
+away. In restricted mode the deploy account has wrapper-only sudo and no
+docker group, root fetches and verifies each commit itself, and every deploy
+is exported into a root-owned release under `/opt/deploy-releases`, with
+`/opt/deploy` a link to the current one. The runbook is
+`scaffold/docs/05-access-model.md`; the release tree is
+`scaffold/docs/15-release-tree.md`. In short:
 
-# 5. First-run hardening and Docker install
-#    From here on Ansible uses the deploy user with your SSH key (no password needed).
-#    This heavier pass enables the slower maintenance/compliance steps too.
-ansible-playbook -i ansible/hosts scaffold/ansible/site-first-run.yml
-
-# 6. Quick day-to-day re-apply path for later changes
-ansible-playbook -i ansible/hosts scaffold/ansible/site-quick.yml
-
-# 7. Reboot once so the latest kernel and package updates are active
-ssh myserver sudo reboot
-
-# Wait a minute or two for SSH to return, then rerun the smoke test.
-
-# 8. Smoke test the fresh VPS
-bash scripts/post-provision-smoke-test.sh myserver
-```
-
-Mode summary:
-- `scaffold/ansible/site-first-run.yml`: heavier first-run/compliance pass
-- `scaffold/ansible/site-quick.yml`: fast day-to-day apply path
-
-This smoke test checks SSH access, sudo, Docker, systemd services, SSH hardening,
-UFW rules, root-account lock state, and deploy-user setup against the real VPS.
-
-`myserver` is only an example alias. Rename it to whatever you want, but keep it
-consistent across `~/.ssh/config`, `ansible/hosts`, and any `ssh` or smoke-test
-commands you run.
+1. Verify the `admin` break-glass account first:
+   `ssh admin@<host> 'sudo -n true && docker ps >/dev/null && echo ADMIN-OK'`.
+2. Set `deploy_restricted_mode=true`, `deploy_release_tree=true`,
+   `deploy_verify_signature=true` (with `deploy_allowed_signers`) and
+   `deploy_repo_url` as host variables, and switch `ansible_user=admin`.
+3. Re-run `ansible-playbook -i ansible/hosts scaffold/ansible/site-quick.yml`.
+4. Run the smoke test through an alias that connects as `admin`; it detects
+   the mode from the user it connects as.
 
 ---
 
 ## Deploy apps to the server
 
-Once provisioned, clone the repo **on the server** so Docker Compose can read it:
+`scripts/provision.sh` clones this repository to `/opt/deploy` on the server
+and runs the first deploy. The server needs a read-only deploy key for this
+repository: create one on the server (`ssh-keygen -t ed25519 -f
+~/.ssh/github-deploy`), add its public half under the repository's
+**Settings, Deploy keys** without write access, and point `~/.ssh/config` on
+the server at it for `github.com`. The release tree copies that key to root.
 
-```bash
-# SSH into the server first, then:
-git clone --recurse-submodules git@github.com:yourorg/server-[name].git /opt/deploy
-cd /opt/deploy
-cp .env.example .env && $EDITOR .env
-# Create .env for each app too (see apps/*/env.example)
-docker compose up -d
-```
+To deploy after a change, push to `main` and run:
 
-For runtime secrets, edit the files on the server in `/opt/deploy`:
-- `.env`
-- `apps/*/.env`
-
-Docker Compose reads those files directly from the server checkout, so local
-copies on your laptop do not affect the running apps until you update the repo
-on the VPS.
-
-To redeploy after changes:
 ```bash
 ssh myserver ./deploy
 ```
 
-The deploy helper also normalizes secret-file permissions on each run:
-- `.env`
-- `apps/*/.env`
-- `backup/config.env`
-- `backup/services/*.env`
-
-Those files are set to mode `600` before Compose restarts containers.
-
-Deploy order:
-- `git pull --recurse-submodules`
-- `docker compose pull`
-- run each executable `apps/*/deploy.sh` hook, if present
-- `docker compose up -d --remove-orphans`
-
-That gives each app a repo-local release hook without hard-coding app-specific
-steps into the shared `~/deploy` helper.
+With `deploy_auto_update=true` in the inventory, the server applies each
+merged commit itself and announces the result over ntfy. Either way the
+wrapper verifies the signature on the commit, renders the secrets, pulls the
+images, runs each executable `apps/*/deploy.sh` hook, and then runs
+`docker compose up -d --remove-orphans --wait`, recreating only the services
+whose settings or mounted files changed.
 
 ---
 
 ## Add an app
 
-Typical app layout:
+Create a folder under `apps/` with three files. The web-facing service must be
+named after the folder, and network wiring is generated, so add none:
 
 ```text
 apps/
@@ -148,72 +127,70 @@ apps/
     docker-compose.yml
     .env.example
     myapp.caddy
-    deploy.sh        # optional
+    deploy.sh        # optional release hook (migrations and the like)
 ```
 
-Create a folder under `apps/` with these files:
+`apps/myapp/docker-compose.yml` pins its image by digest and carries the CIS
+Docker §5 hardening block: a uid of its own (never 1000, the deploy
+account), `cap_drop: [ALL]`, `no-new-privileges`, `read_only` with `tmpfs`,
+`mem_limit`, `pids_limit`, a `healthcheck`, and `cgroup_parent:
+vps-noswap.slice` for a service a visitor waits on. Copy the block from
+`apps/auth/docker-compose.yml`; the rules and their reasons are in
+`scaffold/docs/04-server-repo.md`. A control a container cannot meet is
+recorded, with its reason, in `ansible/audit-exceptions.yml`.
 
-**`apps/myapp/docker-compose.yml`** — the web-facing service must be named
-after the app folder; network wiring is generated, so don't add any:
-```yaml
-services:
-  myapp:
-    image: yourorg/myapp:1.2.3@sha256:...
-    restart: unless-stopped
-    env_file: apps/myapp/.env
-```
+`apps/myapp/.env.example` lists every variable the app reads, with no values.
+The real values go into `secrets/apps/myapp/.env.sops`.
 
-**`apps/myapp/.env.example`** — list every required variable (no values)
+`apps/myapp/myapp.caddy` declares who may reach the site. A gated app imports
+one guard, which runs the login wall and proxies to the upstream itself:
 
-**`apps/myapp/myapp.caddy`**
-```
+```caddyfile
 myapp.{$DOMAIN} {
-    reverse_proxy myapp:3000
+	import protected myapp:3000
 }
 ```
 
-Optional: add an executable **`apps/myapp/deploy.sh`** if the app needs release
-steps before the final `docker compose up -d --remove-orphans`.
+A site that must stay public carries a marker saying why, and strips the
+gateway cookie and any client-sent identity headers before the app sees them:
 
-Make the hook executable in git so it stays executable on the server after
-pulls:
-```bash
-chmod +x apps/myapp/deploy.sh
-git add --chmod=+x apps/myapp/deploy.sh
+```caddyfile
+# scaffold-lint: public -- the app enforces its own token auth
+myapp.{$DOMAIN} {
+	reverse_proxy myapp:3000 {
+		import strip_public
+	}
+}
 ```
 
-Example for Django:
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
+The renderer refuses a site with neither a guard nor a marker, and refuses a
+bare `reverse_proxy` line. The guard catalogue is at the top of
+`apps/auth/auth.caddy`, and `scaffold/docs/07-auth.md` explains the model.
+Keep `.caddy` comments free of braces.
 
-docker compose run --rm myapp_django python manage.py migrate
-docker compose run --rm myapp_django python manage.py collectstatic --noinput
-```
+If the app needs a release hook, make it executable in git
+(`git add --chmod=+x apps/myapp/deploy.sh`). Hooks run as root from the
+release, so read `.env` files as data and never `source` them.
 
 Then add one line to the root `docker-compose.yml`:
+
 ```yaml
 include:
   - apps/myapp/docker-compose.yml
 ```
 
-and re-render the committed Caddy bundle (routes + per-app proxy networks):
+and re-render the committed Caddy bundle:
+
 ```bash
 bash scaffold/docker/render-caddy-routes.sh
 git add .generated
 ```
 
-`.generated/caddy/` is generated-but-committed, like a lockfile: `apps.caddy`
-carries every app's routes (Caddy mounts this file, never the repo itself, so
-secrets stay off the reverse proxy) and `networks.yml` gives each app a private
-proxy network that only Caddy shares — apps cannot reach each other. CI fails
-if the bundle drifts from the sources.
-
-Permission model:
-- Commit `.env.example` files to git as normal templates.
-- Do not commit real `.env` files.
-- Let `~/deploy` reset real `.env` files on the server to mode `600` each run.
-- Let git carry the executable bit for `apps/*/deploy.sh`.
+`.generated/caddy/` is generated but committed, like a lockfile. `apps.caddy`
+carries every app's routes and is the only file Caddy mounts, `networks.yml`
+gives each app a private proxy network that only Caddy shares, and the two
+`.tsv` files tell the gateway which groups each route needs. CI fails if the
+bundle drifts from its sources.
 
 ---
 
@@ -221,220 +198,106 @@ Permission model:
 
 This repo ships an optional passwordless login wall (`apps/auth/`) powered by
 [vps-scaffold-auth](https://github.com/uppertoe/vps-scaffold-auth). Users sign in
-with an emailed 6-digit code; apps behind it receive `Remote-User`,
-`Remote-Email`, and `Remote-Groups` headers. It is **off by default**.
+with an emailed code; apps behind it receive `Remote-User`, `Remote-Email` and
+`Remote-Groups` headers, and nothing else can set those headers. It is off by
+default.
 
-**Enable it:**
-```bash
-cp apps/auth/.env.example apps/auth/.env
-$EDITOR apps/auth/.env          # set SESSION_SECRET (openssl rand -hex 32),
-                                # ALLOWED_EMAIL_DOMAINS, ADMIN_EMAILS, EMAIL_*
-```
-Then uncomment the auth line in `docker-compose.yml`:
-```yaml
-include:
-  - scaffold/docker/caddy.base.yml
-  - apps/auth/docker-compose.yml   # ← uncomment
-```
-Point `auth.<your-domain>` DNS at the server and deploy.
-
-**Protect an app** by importing the shared guard in its `.caddy` snippet:
-```caddyfile
-dashboard.{$DOMAIN} {
-    import protected dashboard:3000
-}
-```
-
-Full details, the admin TOTP option, and a local end-to-end test are in
+To enable it, write `secrets/apps/auth/.env.sops` from `apps/auth/.env.example`
+(at least `SESSION_SECRET`, `ALLOWED_EMAIL_DOMAINS`, `ADMIN_EMAILS` and the
+`EMAIL_*` settings), uncomment the `apps/auth` include in `docker-compose.yml`,
+point `auth.<your-domain>` at the server and deploy. Guard an app with
+`import protected <upstream>` as shown above. The admin TOTP option, the
+break-glass cards and a local end-to-end test are in
 [scaffold/docs/07-auth.md](https://github.com/uppertoe/vps-base-template/blob/main/docs/07-auth.md).
 
-### SSO + CMS (Authelia + Decap), optional
+### CMS commit broker (cms-auth), optional
 
-Two paired apps ship **off by default** for running a Git-based CMS whose editors
-have **no GitHub accounts**:
+`apps/cms-auth` ships off by default. It lets [Decap CMS](https://decapcms.org/)
+editors who have no GitHub accounts commit through one shared GitHub App, with
+each commit authored as the signed-in editor. Editors sign in through the
+gateway above and must hold the `cms-editors` group.
 
-- **`apps/authelia`** — an OpenID Connect provider (`sso.<domain>`), separate from
-  the `apps/auth` gateway above. This is the login for editors.
-- **`apps/cms-auth`** — a broker that lets [Decap CMS](https://decapcms.org/) commit
-  through **one shared GitHub App**, with each commit **authored as the signed-in
-  editor** (the App key stays server-side, never in the browser).
-
-**Enable:** turn on `apps/authelia` (set its `AUTHELIA_*` secrets, rename
-`authelia.caddy.disabled` → `authelia.caddy`, uncomment its include), then run
-`bash apps/cms-auth/setup.sh` — it mints the OIDC client secret, assembles the
-`.env`, base64s the GitHub App key, and renders Caddy; you click through the App
-creation and add editors to the `cms-editors` group. Point your CMS site's Decap
-`config.yml` at `base_url` + `api_root: https://cms-auth.<domain>/api`. See
-[`apps/cms-auth/README.md`](apps/cms-auth/README.md) and
-[`apps/authelia/README.md`](apps/authelia/README.md).
+Enable the gateway first, then run `bash apps/cms-auth/setup.sh` on your
+laptop. It walks through creating the GitHub App, writes the two env files
+and prints the `sops` commands that move them into `secrets/`. Rename
+`cms-auth.caddy.disabled` to `cms-auth.caddy`, uncomment its include, and
+point the CMS site's Decap `config.yml` at `https://cms-auth.<domain>/api`.
+See [`apps/cms-auth/README.md`](apps/cms-auth/README.md).
 
 ---
 
-## Database backups
+## Backups
 
-Databases are backed up to S3-compatible storage via Restic. Each database
-gets its own repository and encryption key. Backups run hourly by default, and
-repository verification runs weekly by default on an explicit off-hour schedule.
+Databases are backed up to S3-compatible storage with restic, one repository
+and key per database, hourly by default, with a weekly repository check and a
+monthly restore drill. `scripts/aws-backup-setup.py` creates the bucket and a
+prefix-scoped IAM user and prints the values to use.
 
-**Configure:**
-```bash
-cp backup/config.env.example backup/config.env && $EDITOR backup/config.env
+The restic configuration lives in `secrets/backup/`: `config.env.sops` holds
+the shared credentials and retention (from `backup/config.env.example`) and
+`services/<name>.env.sops` holds one database each (from
+`backup/services/service.env.example`). The deploy installs them into
+`/etc/restic`, so a database is backed up for exactly as long as its file is
+in the repository. `ansible/backup.yml` installs the restic timers:
 
-# One file per database:
-cp backup/services/service.env.example backup/services/myapp.env
-$EDITOR backup/services/myapp.env
-```
-
-If you use AWS for backup storage, you can provision the bucket + IAM user
-locally on your laptop first:
-```bash
-pip install boto3
-python3 scripts/aws-backup-setup.py \
-  --profile my-aws-admin \
-  --bucket myserver-backups \
-  --iam-user myserver-backup
-```
-
-That helper is idempotent. It prints the AWS values to copy into
-`backup/config.env`, and can optionally update that file locally with
-`--write-config`.
-
-It also scopes the backup IAM user to the bucket's `backups/` prefix, so
-service repositories should use paths like
-`s3:s3.amazonaws.com/<bucket>/backups/<service>`.
-
-`backup/config.env` controls shared credentials and snapshot retention only.
-The `KEEP_DAILY`, `KEEP_WEEKLY`, and `KEEP_MONTHLY` values tell Restic how many
-snapshots to retain after each run; they do not change the schedule. The
-backup job schedule is controlled by the Ansible variable `backup_schedule`,
-which defaults to `hourly`.
-
-Unlike the app/runtime `.env` files above, these backup env files are edited
-locally in your server repo on your laptop. The backup playbook uploads them to
-the server and installs them into `/etc/restic/`.
-
-**Deploy:**
 ```bash
 ansible-playbook -i ansible/hosts ansible/backup.yml
-
-# Then rerun the smoke test in strict backup mode:
 bash scripts/post-provision-smoke-test.sh myserver --require-backup
 ```
 
-### Recovery bundle (do this once, now)
+The `KEEP_*` values set how many snapshots restic keeps; the schedule is the
+Ansible variable `backup_schedule`. The `env-files` service in
+`backup/services/env-files.env.example` is for a server that has not adopted
+SOPS, whose `.env` files exist only on the box.
 
-Backups prove the *data* restores; rebuilding the *box* also needs the files
-that are deliberately not in git — the inventory, `.env` files and backup
-credentials (including the restic repository password, without which the
-backups are undecryptable). Bundle them, encrypted, and store the result
-somewhere that survives your laptop:
+### Recovery set
 
-```bash
-bash scripts/make-recovery-bundle.sh
-```
+Rebuilding the box needs the files that are deliberately not in git in plain
+form. With secrets in SOPS, this repository and the recovery key in your
+password manager are the recovery set: the env files are under `secrets/`,
+the restic configuration under `secrets/backup/`, and the inventory in
+`secrets/recovery.sops`. The strict smoke test reports the set as held in
+SOPS. The rebuild drill is `scaffold/docs/09-recovery.md`.
 
-Re-run it after rotating any credential. The full "box is gone" rebuild drill
-— worth walking once on a throwaway VPS and timing — is documented in
-`scaffold/docs/09-recovery.md`.
-
-### Cloud-side security review (Prowler)
-
-The S3/IAM posture that the backup and log-export controls depend on lives in
-AWS, outside anything the VPS audits can see. Review it quarterly from your
-laptop with [Prowler](https://github.com/prowler-cloud/prowler), scoped to the
-services this stack uses:
+A server without SOPS packages the same set into one encrypted bundle instead.
+That script must run on the server with `sudo`, because the restic secrets in
+`/etc/restic` are root-only and a laptop bundle silently omits them:
 
 ```bash
-pipx install prowler
-prowler aws --profile my-aws-admin -f ap-southeast-2 \
-  --services s3 iam \
-  --output-directory reports/prowler-$(date +%Y%m%d)
+ssh -t myserver 'cd /opt/deploy && sudo scripts/make-recovery-bundle.sh'
+scp myserver:'~/recovery-bundle-*.tar.gz.enc' .
 ```
 
-Review FAILs against the intended design (Object-Lock log bucket, write-only
-log IAM user, prefix-scoped backup user) and file the report with the audit
-pack. Not run from CI by design — it needs your admin credentials.
+### Off-host log export
 
-### Supply-chain digest currency
+The scaffold's `log-export` role ships nightly, hash-chained log archives to an
+S3 bucket that even the server's own credentials cannot rewrite (Object Lock
+and a write-only IAM user). `scripts/aws-logs-setup.py` creates that bucket
+and prints the `log_export_*` values for `ansible/hosts`; re-run
+`site-quick.yml` afterwards.
 
-Every compose image is pinned by digest (CI's `image-pins` job enforces it).
-Currency has two layers: the weekly **Digest Freshness** workflow compares
-each pin to the registry's current digest and opens an issue on drift
-(`bash scripts/check-digest-freshness.sh` runs the same check locally), and —
-recommended — enable the **Mend Renovate GitHub App** on this repo and the
-scaffold so drift arrives as automated bump PRs instead (the committed
-`renovate.json5` is already configured for digest pinning).
+### Cloud-side review (Prowler)
 
-### Secret recovery (env files)
+The S3 and IAM posture lives in AWS, outside what the VPS audits can see.
+Review it quarterly from your laptop with
+[Prowler](https://github.com/prowler-cloud/prowler), scoped to `s3 iam`, and
+file the report with the audit pack. It is not run from CI because it needs
+your admin credentials.
 
-The gitignored `.env` files exist only on the VPS — without an off-host copy,
-losing the box means re-minting every credential even though the databases
-restore cleanly. Enable the bundled files-only backup service:
+### Keeping images current
 
-```bash
-cp backup/services/env-files.env.example backup/services/env-files.env
-$EDITOR backup/services/env-files.env   # set RESTIC_REPOSITORY + RESTIC_PASSWORD
-ansible-playbook -i ansible/hosts ansible/backup.yml
-```
-
-**Store that service's `RESTIC_REPOSITORY` and `RESTIC_PASSWORD` in your
-password manager immediately** — it is the recovery root: the one credential
-pair that unlocks everything else after a total host loss. Restore on a fresh
-box with `sudo /opt/backup/restore.sh --service env-files` before running
-`./deploy`.
-
-### Off-host log export (compliance evidence)
-
-The scaffold's `log-export` role ships nightly, hash-chained log archives to
-an S3 bucket that even the server's own credentials cannot rewrite (S3 Object
-Lock + a write-only IAM user). Provision the destination from your laptop:
-
-```bash
-pip install boto3
-python3 scripts/aws-logs-setup.py \
-  --profile my-aws-admin \
-  --bucket myserver-logs \
-  --iam-user myserver-log-writer
-```
-
-The helper is idempotent, keeps this bucket separate from the backup bucket
-(different threat model, credentials, and retention), and prints the
-`log_export_*` values to paste into `ansible/hosts`. Re-run
-`site-quick.yml` afterwards to enable the nightly export; verify with
-`sudo tail /var/lib/log-export/hash-chain.log` on the host.
-
-**Adding a database** = copy `backup/services/service.env.example` to
-`backup/services/newservice.env`, fill it in, re-run the playbook.
-
-For `CONTAINER_NAME`, you can use either the exact running container name or
-the Compose service/container stem if it is unique. For example, `jw_postgres`
-will resolve to a container such as `deploy-jw_postgres-1`.
-
-**Restore:**
-```bash
-# On the server:
-/opt/backup/restore.sh --service myapp --list
-/opt/backup/restore.sh --service myapp --target myapp_test   # safe test restore
-/opt/backup/restore.sh --service myapp                       # production restore (prompts)
-```
-
-**Trigger a backup now:**
-```bash
-ssh myserver sudo systemctl start backup.service
-ssh myserver journalctl -u backup.service -f
-
-# Manual repository verification:
-ssh myserver sudo systemctl start backup-verify.service
-ssh myserver journalctl -u backup-verify.service -f
-```
-
-**Local backup tests before deploying to a real VPS:**
-```bash
-cd scaffold
-molecule test -s backup
-bash backup/tests/integration/run_tests.sh
-cd ..
-```
+Every compose image is pinned by digest, and CI's `static-checks` job refuses
+an unpinned one. Two things keep the pins current. The weekly **Digest
+Freshness** workflow compares each pin with the registry and opens an issue on
+drift (`bash scripts/check-digest-freshness.sh` runs the same check locally).
+A self-hosted Renovate runner, driven by a fleet GitHub App, opens the bump
+PRs: third-party digest bumps and scaffold bumps automerge once CI is green,
+version bumps of images wait for a person. The committed `renovate.json5` is
+configured for that runner, and its `postUpgradeTasks` entry (which only a
+self-hosted Renovate executes) rewrites the shared files on a scaffold bump.
+The Mend-hosted app is not used. `scripts/update-pipeline-state.json` records
+the runner, the app and your app repositories, and the weekly
+**Update Pipeline Freshness** workflow checks reality against it.
 
 ---
 
@@ -443,55 +306,55 @@ cd ..
 ```bash
 cp docker-compose.override.yml.example docker-compose.override.yml
 docker compose up -d
-docker compose exec caddy caddy trust   # once per machine — adds CA to keychain
+docker compose exec caddy caddy trust   # once per machine
 ```
 
 ---
 
 ## Security auditing
 
-**Compliance pack:** `docs/compliance-pack/` is a filled worked example of the
-scaffold's evidence templates (SSP, asset register, scope determination,
-jurisdiction record, retention design, IR runbook, access-review log, control
-matrix) for this template's staging instance. For a real deployment, re-answer
-the scope determination first, then re-fill the `⟨fill at commissioning⟩`
-fields — see its README.
+**Compliance pack:** the evidence templates (SSP, asset register, scope
+determination, jurisdiction record, retention design, IR runbook, control
+matrix) are the scaffold's one set, `scaffold/docs/templates/`. Copy them to
+`compliance/`, answer the scope determination first, then fill the
+`⟨fill at commissioning⟩` fields. A private server repo tracks the filled pack
+(remove the `compliance/` rule from `.gitignore` there).
 
-Run against a real provisioned VPS (not locally):
+**Shared tooling:** the checks under `scripts/` are shims for the scaffold's
+copies, and the CI workflows call the scaffold's reusable workflows at the
+submodule commit. `bash scripts/check-server-files.sh` keeps both in step and
+`.scaffold-server.yml` holds this server's choices. See
+[scaffold/docs/14-server-tooling.md](https://github.com/uppertoe/vps-base-template/blob/main/docs/14-server-tooling.md).
+
+Run the audits against the real server. `audit-all.yml` is the one-command
+evidence bundle; it needs the deployment's exception register:
 
 ```bash
-ansible-playbook -i ansible/hosts scaffold/ansible/audit-lynis.yml
-ansible-playbook -i ansible/hosts scaffold/ansible/audit-openscap.yml
-ansible-playbook -i ansible/hosts scaffold/ansible/audit-docker.yml
+ansible-playbook -i ansible/hosts scaffold/ansible/audit-all.yml \
+  -e @ansible/audit-exceptions.yml
 ```
 
-Reports saved to `reports/` (gitignored).
-
-Feedback loop:
-1. Run `scaffold/ansible/site-first-run.yml` to establish the strongest baseline the scaffold supports by default.
-2. Run `scaffold/ansible/audit-openscap.yml` and `scaffold/ansible/audit-docker.yml`.
-3. Review the reports and separate findings into:
-   expected platform exceptions, host-hardening gaps, and per-container app gaps.
-4. Fix host gaps in inventory vars or scaffold roles, and fix container gaps in `apps/*/docker-compose.yml`.
-5. Re-run `scaffold/ansible/site-quick.yml`.
-6. Re-run the audits until the remaining findings are either resolved or formally accepted.
+Reports land in `reports/` (gitignored). Individually: `audit-openscap.yml`
+(CIS OS), `audit-docker.yml` (CIS Docker §1 to §4), `audit-compose.yml`
+(CIS Docker §5 on the running stack), `audit-lynis.yml` and `audit-vuln.yml`
+(Trivy). Fix host findings in inventory variables or the scaffold's roles,
+and container findings in `apps/*/docker-compose.yml`; a finding that is
+accepted goes into `ansible/audit-exceptions.yml` with its reason. See
+`scaffold/docs/06-auditing.md`.
 
 ---
 
 ## Update the scaffold
 
+Renovate opens a PR for each new scaffold commit and runs the fix step in the
+branch. To bump by hand:
+
 ```bash
-# Existing server repos do not automatically pick up new scaffold commits.
-# Update the submodule, then commit the new scaffold pointer in your repo.
-git submodule update --remote --merge scaffold
-git add scaffold
-git commit -m "chore: update scaffold"
-git push
+git -C scaffold fetch && git -C scaffold checkout <commit>
+bash scaffold/scripts/server/check-server-files.sh --fix   # the shims and workflows may be new
+bash scaffold/docker/render-caddy-routes.sh                # the renderer may have changed
+git add scaffold scripts .github .gitignore .generated && git commit
 ```
 
-If a template fix touched top-level files such as `Caddyfile`, `Caddyfile.local`,
-or `ansible/hosts.example`, copy those changes into your existing server repo
-manually too. Top-level files are copied when the repo is created; only
-`scaffold/` stays linked as a submodule.
-
-On the server: `~/deploy`
+Read every `scaffold/UPGRADING.md` entry newer than your old pointer before
+re-running the site play; some bumps need an operator action.

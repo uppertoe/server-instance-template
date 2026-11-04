@@ -4,25 +4,56 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
   "labels": ["dependencies"],
-  "docker": {
-    "pinDigests": true,
-  },
-  // Registry credential for PRIVATE first-party images lives in the
-  // SELF-HOSTED RUNNER's global config (your renovate-runner repo ->
-  // config.js hostRules, fed by its GHCR_READ_TOKEN Actions secret; a
-  // classic PAT with read:packages only). Repo configs cannot hold secrets.
+  // Private first-party images need a read:packages token for digest lookups;
+  // it lives in the self-hosted runner's global config, never in this file.
+  // A manually closed digest PR is recreated on the next run, so a one-off
+  // close never permanently stops auto-deploys (top level: not honoured
+  // inside packageRules).
+  "recreateWhen": "always",
+  // The scaffold-managed workflow copies change only through a scaffold bump
+  // plus check-server-files.sh --fix; a digest bump inside one fails CI as drift.
+  "ignorePaths": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/container-security.yml",
+    ".github/workflows/secret-scan.yml",
+    ".github/workflows/deploy-ping.yml",
+    ".github/workflows/digest-freshness.yml",
+    ".github/workflows/maintenance-day.yml",
+    ".github/workflows/codeql.yml",
+    ".github/workflows/scorecard.yml",
+    ".github/workflows/update-pipeline-freshness.yml",
+  ],
+  // A timestamp-less release (every Docker digest) counts as stable, so a
+  // minimumReleaseAge rule can never turn into "never".
+  "minimumReleaseAgeBehaviour": "timestamp-optional",
   "packageRules": [
-    // ── THIRD-PARTY images ──────────────────────────────────────────────
-    // Pin + group digest bumps, and hold them for a 3-day cooldown before
-    // automerge. The cooldown lets upstreams we don't control settle (e.g. yank
-    // a bad tag) before we pull it. It does NOT apply to our own apps — see the
-    // FIRST-PARTY rule further down, which overrides this for matching images.
+    // Digest-pin every Docker image. Migrated from the top-level `docker`
+    // config to this packageRule form (matchCategories) per Renovate's config
+    // migration — same effect, current schema.
     {
-      "description": "Regex-managed digest pins ride the same automerge+cooldown as compose pins",
+      "matchCategories": ["docker"],
+      "pinDigests": true,
+    },
+
+    // ── THIRD-PARTY images ──────────────────────────────────────────────
+    // Pin + group digest bumps and automerge them once repo CI is green.
+    // NO minimumReleaseAge here: Renovate cannot date a Docker digest ("digest
+    // update of <image> has no releaseTimestamp to age against"), and with the
+    // default timestamp-required behaviour an undated update stays pending
+    // forever — the old 3-day "cooldown" silently froze third-party digest
+    // bumps from 2026-07-21 to 2026-09-05. A digest bump is a rebuild of the
+    // same tag, so the settle window buys little; compose-smoke and the
+    // container-security scan remain the gate. Version bumps of these images
+    // are human-gated (no automerge rule covers them) — which only holds for
+    // images pinned to a VERSION tag. A `latest` tag turns every upstream
+    // release, majors included, into a "digest bump" that automerges, so the
+    // third-party images are pinned to versions (ntfy v2.x, postgres, redis);
+    // Renovate then proposes version bumps as ordinary PRs.
+    {
+      "description": "Regex-managed digest pins ride the same automerge as compose pins",
       "matchManagers": ["custom.regex"],
       "matchUpdateTypes": ["digest", "pin", "pinDigest"],
       "groupName": "docker image digests",
-      "minimumReleaseAge": "3 days",
       "automerge": true,
     },
     {
@@ -30,14 +61,12 @@
       "matchManagers": ["docker-compose", "dockerfile"],
       "matchUpdateTypes": ["digest", "pin", "pinDigest"],
       "groupName": "docker image digests",
-      "minimumReleaseAge": "3 days",
       "automerge": true,
     },
 
-    // ── FIRST-PARTY apps — no cooldown ──────────────────────────────────
-    // Our own images are already gated by their own repo CI before they publish,
-    // so there's nothing to "let settle": update immediately. A match here wins
-    // over the 3-day rules above (later rules override earlier ones).
+    // ── FIRST-PARTY apps ────────────────────────────────────────────────
+    // Our own images are already gated by their own repo CI before they publish.
+    // A match here wins over the rules above (later rules override earlier ones).
     //
     //   >>> EDIT THIS LIST when you deploy a new app of your own <<<
     //   Each entry is a Renovate package-name glob:
@@ -45,31 +74,57 @@
     //     "**/<app-name>"     — one named app, wherever it's hosted
     //     "<exact/name>"      — a single exact image name
     {
-      "description": "First-party app images update immediately (skip the third-party cooldown)",
+      "description": "First-party app images update in their own group",
       "matchDatasources": ["docker"],
       "matchPackageNames": [
-        "ghcr.io/uppertoe/**", // our GHCR namespace — covers vps-scaffold-auth, etc.
-        "**/anaes-data-lab", // named first-party app, if ever hosted outside the namespace
+        "ghcr.io/uppertoe/**", // the scaffold's own images: vps-scaffold-auth, hugo-orchestrate, kanban-gateway-signin
+        // "ghcr.io/<your-org>/**", // add your own namespace or app names here
       ],
       "matchUpdateTypes": ["digest", "pin", "pinDigest"],
-      "minimumReleaseAge": "0 days",
       // Own group, NOT the shared "docker image digests" one: a grouped PR
-      // only automerges when every member's status is green, so first-party
-      // CVE fixes would otherwise sit behind a third-party digest still
-      // serving its 3-day stability window.
+      // only automerges when every member's status is green, so a first-party
+      // CVE fix would otherwise wait on whatever third-party member is red.
       "groupName": "first-party image digests",
       "automerge": true,
+      // Main moves most days, so a PR rebased on every run never reaches the
+      // merge step (open a week without merging, 2026-10-26 to 11-02). Rebase
+      // only when it conflicts; a behind-but-clean PR merges.
+      "rebaseWhen": "conflicted",
     },
 
     {
       "description": "Scaffold submodule bumps: automerge once repo CI proves the merged stack boots",
       "matchManagers": ["git-submodules"],
       "automerge": true,
+      // A pointer bump moves only the submodule. Three workflow callers embed
+      // the scaffold commit and the shims must match the canonical copies, so
+      // the drift check (scripts/check-server-files.sh) would fail the bump.
+      // Run its fix mode in the branch so the PR carries the rewritten files;
+      // the command is allowlisted in the fleet runner's config.js.
+      "postUpgradeTasks": {
+        "commands": ["bash scripts/check-server-files.sh --fix"],
+        "fileFilters": ["**/*"],
+        "executionMode": "branch",
+      },
     },
     {
-      "description": "Automerge action pin/digest updates; version bumps stay manual",
+      "description": "Automerge action pin/digest updates immediately",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["digest", "pin", "pinDigest"],
+      "automerge": true,
+    },
+    {
+      // GitHub Actions VERSION bumps (incl. majors) automerge too — a CI-action
+      // change is low-risk and trivially revertible (it never touches the
+      // running stack), so it doesn't warrant a maintenance-day gate. A 3-day
+      // settle lets a bad release get yanked before we adopt it. NOTE: this is
+      // deliberately github-actions ONLY — docker image / DB majors (e.g.
+      // postgres 16->18) stay HUMAN-gated (no automerge rule covers them), they
+      // can carry breaking data migrations that need a person.
+      "description": "Automerge github-actions version bumps incl. majors (3-day settle)",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "minimumReleaseAge": "3 days",
       "automerge": true,
     },
   ],

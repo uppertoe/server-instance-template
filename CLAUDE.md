@@ -33,14 +33,20 @@ handful of web-app containers.
   `09-recovery.md` (recovery bundle + rebuild drill), `10-lts-migration.md`
   (OS release jumps), `11-incident-response.md` (containment → notification →
   rebuild).
-- **`docs/compliance-pack/`** is the filled Vic-health evidence pack for the
-  staging instance (worked example of `scaffold/docs/templates/`). Real
-  deployments re-answer `scope-determination.md` first, then re-fill the
-  `⟨fill at commissioning⟩` fields. Tripwire running through it: the first
-  app holding identifiable health information forces AU hosting, TOTP, and
-  at-rest encryption (the substantive HPP obligations); the DH layer applies
-  only when operating for a health service. The pack's job is demonstrable
-  compliance on the merits, not institutional sign-off.
+- **`compliance/`** (absent here; gitignored) is where a server repo keeps its
+  filled Vic-health evidence pack, copied from the scaffold's one template set
+  (`scaffold/docs/templates/`). Answer `scope-determination.md` first, then
+  fill the `⟨fill at commissioning⟩` fields. Tripwire running through it: the
+  first app holding identifiable health information forces AU hosting, TOTP,
+  and at-rest encryption (the substantive HPP obligations); the DH layer
+  applies only when operating for a health service. A private server repo
+  tracks the filled pack. The pack's job is demonstrable compliance on the
+  merits, not institutional sign-off.
+- **Shared tooling lives in the scaffold** (`scaffold/docs/14-server-tooling.md`):
+  `scripts/*` are shims, the CI workflows call the scaffold's reusable
+  workflows at the submodule commit, and `.scaffold-server.yml` holds this
+  server's choices. Never edit a shim or a shared workflow here; run
+  `bash scripts/check-server-files.sh --fix` after bumping the pointer.
 
 ## Lifecycle / commands
 
@@ -77,11 +83,11 @@ Inventory lives in `ansible/hosts` (gitignored; copy `ansible/hosts.example`).
   Copy the pattern from `apps/auth/` or `docker/caddy.base.yml`. `audit-compose.yml`
   and CI (`forward-auth-security`, `compose-smoke`, `container-security`) enforce it.
 - **Every image is pinned by digest** (`image: repo:tag@sha256:…`) — including the
-  bundled `apps/auth` and `apps/ntfy`. CI's `image-pins` job
+  bundled `apps/auth` and `apps/ntfy`. CI's `static-checks` job
   (`scripts/check-image-pins.sh`) fails on any unpinned image; Renovate
-  (`renovate.json5`, `pinDigests`) keeps the digests current via PR. Your own
-  images skip the 3-day third-party cooldown — add each to the FIRST-PARTY list
-  in `renovate.json5` when you deploy a new app of your own.
+  (`renovate.json5`, `pinDigests`) keeps the digests current via PR. Add each
+  of your own images to the FIRST-PARTY list in `renovate.json5` when you
+  deploy a new app, so it updates in its own group.
 - **`.caddy` snippets: never put `{` or `}` in a comment** — the route renderer
   counts braces when assembling the Caddyfile bundle and unbalanced ones corrupt it.
 - **Protect an app/path with auth:** the guard snippets take the upstream as an

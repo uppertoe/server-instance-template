@@ -13,12 +13,13 @@ docker compose up -d --wait ntfy
 # rather than pre-checking `ntfy user list`: just after the force-recreate above
 # the container can answer an empty list before its auth DB is ready, which would
 # make the pre-check spuriously add and then abort the whole deploy (set -e).
-if [ -f apps/ntfy/.env ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . apps/ntfy/.env
-  set +a
-fi
+# Read the three named keys as data; never `source` the file. This hook runs
+# as root under vps-deploy while .env is owned by the deploy user, so sourcing
+# it would let a deploy-level write run shell as root (2026-10-31 review).
+env_value() { grep -E "^${2}=" "$1" 2>/dev/null | tail -n 1 | cut -d= -f2- | sed -e "s/^[\"']//" -e "s/[\"']\$//"; }
+NTFY_ADMIN_PASSWORD="$(env_value apps/ntfy/.env NTFY_ADMIN_PASSWORD)"
+NTFY_DEPLOY_PASSWORD="$(env_value apps/ntfy/.env NTFY_DEPLOY_PASSWORD)"
+NTFY_DEPLOY_TOPIC="$(env_value apps/ntfy/.env NTFY_DEPLOY_TOPIC)"
 if [ -n "${NTFY_ADMIN_PASSWORD:-}" ]; then
   if add_out=$(docker compose exec -T -e "NTFY_PASSWORD=${NTFY_ADMIN_PASSWORD}" ntfy \
         ntfy user add --role=admin admin 2>&1); then

@@ -1,8 +1,8 @@
 services:
   # One-shot volume initialiser: fresh named volumes are root-owned, and the
-  # hardened ntfy below runs as 1000 — it dies at startup unable to create its
-  # user/cache DBs on a first provision (long-lived hosts never noticed:
-  # their volumes predate the non-root hardening). Same pattern as caddy-init.
+  # hardened ntfy below runs as 10011, so without this it dies at startup
+  # unable to create its user and cache databases on a first provision.
+  # Same pattern as caddy-init.
   ntfy-init:
     image: binwiederhier/ntfy:v2.37.1@sha256:a1dde1f3210b68ac0c29e53298c96a988d06c320d1201d72f3e8e224d1a546f3
     restart: "no"
@@ -18,7 +18,7 @@ services:
     mem_limit: 64m
     pids_limit: 32
     network_mode: none
-    entrypoint: ["/bin/sh", "-c", "chown -R 1000:1000 /var/cache/ntfy /var/lib/ntfy"]
+    entrypoint: ["/bin/sh", "-c", "chown -R 10011:10011 /var/cache/ntfy /var/lib/ntfy"]
     volumes:
       - ntfy_cache:/var/cache/ntfy
       - ntfy_lib:/var/lib/ntfy
@@ -41,8 +41,10 @@ services:
     restart: unless-stopped
     init: true  # reap the healthcheck's wget zombies (per upstream compose)
     # CIS Docker §5 runtime hardening. ntfy listens on a high port (8080) so it
-    # needs no privileged-port capability and runs non-root.
-    user: "1000:1000"
+    # needs no privileged-port capability and runs non-root. The uid is ntfy's
+    # own: 1000 is the deploy account on the host, and the compose audit
+    # forbids it (ansible/audit-exceptions.yml).
+    user: "10011:10011"
     cap_drop:
       - ALL
     security_opt:
