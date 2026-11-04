@@ -18,6 +18,14 @@ auth.{$DOMAIN} {
 	@breakglass path /break /break/*
 	log_skip @breakglass
 
+	# A sign-in form is a few hundred bytes and the largest admin form, a
+	# branding upload, just over 2 MiB. Refusing anything larger here keeps an
+	# oversized anonymous body from ever reaching the service, which also caps
+	# bodies itself (64 KiB on public routes).
+	request_body {
+		max_size 4MB
+	}
+
 	reverse_proxy auth:8080 {
 		header_up X-Forwarded-For {http.request.remote.host}
 	}
@@ -39,7 +47,10 @@ auth.{$DOMAIN} {
 # run-caddy.sh counts braces when assembling the Caddyfile.
 #
 # Usage (domains and groups are space/comma-separated; UPSTREAM is host:port):
-#   import protected UPSTREAM                       -- any signed-in user; NOT break-glass
+#   import protected UPSTREAM                       -- any signed-in user; NOT break-glass, NOT guests
+#   import protected_open UPSTREAM                  -- any signed-in user AND guests: strangers who
+#                                                      signed in through a host listed in
+#                                                      OPEN_REGISTRATION_HOSTS. For the one public app.
 #   import protected_domains "example.org" UPSTREAM  -- signed-in user at a listed email domain.
 #                                                      The login page hints the domain and a
 #                                                      wrong-domain address is declined early.
@@ -152,6 +163,22 @@ auth.{$DOMAIN} {
 	}
 }
 
+# Like protected, but also admits guests. Use it for the one app that is meant
+# for the public -- an application form, a sign-up page -- and list that app's
+# host in OPEN_REGISTRATION_HOSTS so strangers can sign in there. Leave every
+# other app on protected or a narrower guard. The app sees Remote-Groups
+# beginning "guest" for a guest and "user" or "admin" for everyone else, and
+# should treat the two accordingly.
+(protected_open) {
+	route {
+		import strip_client_identity
+		import auth_gate "any;guests=allow"
+		reverse_proxy {args[0]} {
+			import strip_auth_cookie
+		}
+	}
+}
+
 (protected_domains) {
 	route {
 		import strip_client_identity
@@ -232,17 +259,39 @@ auth.{$DOMAIN} {
 # with a top-level redir, which orders BEFORE the gate (use
 # protected_domains_redir below for that).
 #   import protected_domains_gate "example.org"
-# Gated static responses default to Cache-Control "private, no-cache"
-# (?-prefixed, so a site block can override): the auth wall gates the fetch,
-# not the copy -- without this, a browser on a shared workstation can serve
-# gated pages from its cache after logout. no-cache forces revalidation,
-# which re-enters this gate; private keeps shared caches out. Efficient 304s
-# still work.
+# Gated responses default to Cache-Control "private, no-cache" (?-prefixed, so
+# a site block can override): the auth wall gates the fetch, not the copy --
+# without this, a browser on a shared workstation can serve gated pages from
+# its cache after logout. no-cache forces revalidation, which re-enters this
+# gate; private keeps shared caches out. Efficient 304s still work.
+# EXCEPTION: fingerprinted static assets (a content hash in the filename) are
+# left alone, so the scaffold's immutable-cache rule can serve them from the
+# browser without a per-navigation revalidation round-trip. They carry no
+# per-user content, so caching a hashed asset past logout leaks nothing; the
+# sensitive thing is the HTML page, which is un-fingerprinted and still
+# no-cache. The regex matches the renderer's @scaffold_static_hashed rule,
+# including Hugo's processed-image names (photo_hu_<hash>.webp).
 (protected_domains_gate) {
 	route {
 		import strip_client_identity
 		import auth_gate "domains={args[0]}"
-		header ?Cache-Control "private, no-cache"
+		@uncacheable not path_regexp (?:\.[0-9a-f]{8,}|_hu_[0-9a-f]{12,16})\.(?:css|js|mjs|woff2?|ttf|otf|svg|png|jpe?g|webp|avif|gif|ico)$
+		header @uncacheable ?Cache-Control "private, no-cache"
+	}
+}
+
+# Like protected_domains_gate, but domains OR groups admit -- the static
+# sibling of protected_access. This is the break-glass door for static
+# content: an emergency QR session carries only its card's target group, so
+# a file_server site is reachable by card holders ONLY via a guard that
+# lists that group. Args: domains, groups.
+#   import protected_access_gate "example.org" "handbook_break_glass"
+(protected_access_gate) {
+	route {
+		import strip_client_identity
+		import auth_gate "domains={args[0]};groups={args[1]}"
+		@uncacheable not path_regexp (?:\.[0-9a-f]{8,}|_hu_[0-9a-f]{12,16})\.(?:css|js|mjs|woff2?|ttf|otf|svg|png|jpe?g|webp|avif|gif|ico)$
+		header @uncacheable ?Cache-Control "private, no-cache"
 	}
 }
 

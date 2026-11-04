@@ -1,3 +1,12 @@
+{
+	# Request headers are capped well below Caddy's 1 MB default: every gated
+	# request's headers, cookies included, are copied to the auth service's
+	# /verify, which refuses more than 64 KiB itself.
+	servers {
+		max_header_size 64KB
+	}
+}
+
 # App routing snippets from apps/*/*.caddy are rendered into
 # .generated/caddy/apps.caddy before Caddy starts.
 # Injected into every site automatically: compression, JSON access logs with

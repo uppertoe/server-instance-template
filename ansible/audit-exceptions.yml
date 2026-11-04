@@ -1,0 +1,22 @@
+# Accepted CIS Docker §5 exceptions for THIS deployment, read by the scaffold's
+# compose audit. It is a play variable file, so pass it as extra-vars:
+#
+#   ansible-playbook -i ansible/hosts scaffold/ansible/audit-all.yml \
+#     -e @ansible/audit-exceptions.yml
+#
+# CI's compose smoke test reads the exceptions below as well and maps the
+# deploy-* container names to its own project name, so one register serves
+# the box and CI.
+
+# Uids no container may run as. 1000 is the deploy account on the host, so a
+# container sharing it would own the deploy checkout and every file the two
+# meet on (bind mounts, volumes, anything reachable after an escape). Give
+# each app a uid of its own; the bundled ntfy runs as 10011.
+audit_compose_forbidden_uids: [1000]
+
+# One entry per container that cannot meet a control, keyed by its production
+# container name (deploy-<service>-1) and listing the controls it is excused
+# from. Record the reason beside the entry and in the app's docker-compose.yml,
+# and cite it in the compliance control matrix (row 5). For example:
+#   deploy-myapp-db-1: [read_only]   # the Postgres entrypoint needs a writable rootfs
+audit_compose_exceptions: {}
