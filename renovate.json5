@@ -10,6 +10,19 @@
   // close never permanently stops auto-deploys (top level: not honoured
   // inside packageRules).
   "recreateWhen": "always",
+  // The scaffold-managed workflow copies change only through a scaffold bump
+  // plus check-server-files.sh --fix; a digest bump inside one fails CI as drift.
+  "ignorePaths": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/container-security.yml",
+    ".github/workflows/secret-scan.yml",
+    ".github/workflows/deploy-ping.yml",
+    ".github/workflows/digest-freshness.yml",
+    ".github/workflows/maintenance-day.yml",
+    ".github/workflows/codeql.yml",
+    ".github/workflows/scorecard.yml",
+    ".github/workflows/update-pipeline-freshness.yml",
+  ],
   // A timestamp-less release (every Docker digest) counts as stable, so a
   // minimumReleaseAge rule can never turn into "never".
   "minimumReleaseAgeBehaviour": "timestamp-optional",

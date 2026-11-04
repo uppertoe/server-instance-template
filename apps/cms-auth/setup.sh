@@ -104,6 +104,28 @@ Done. Remaining manual step (people, not machines):
   * Put each editor in the 'cms-editors' group on the gateway's admin Groups
     page. Only they can sign in to the CMS.
 
+EOF
+if [ -f .sops.yaml ]; then
+  # Secrets live in secrets/ (SOPS); the plaintext files written above are
+  # gitignored working copies. Encrypt them to the repo's recipients and
+  # delete the plaintext once committed. --filename-override makes SOPS pick
+  # the recipients rule for the file's final path.
+  cat <<EOF
+This server keeps its secrets in SOPS (secrets/README.md). Encrypt the two
+files written above, commit them signed with apps/cms-auth and .generated,
+then delete the plaintext copies:
+  mkdir -p secrets/apps/cms-auth
+  sops --encrypt --input-type dotenv --output-type dotenv \
+    --filename-override secrets/apps/cms-auth/.env.sops $env_file > secrets/apps/cms-auth/.env.sops
+  sops --encrypt --input-type dotenv --output-type dotenv \
+    --filename-override secrets/.env.sops .env > secrets/.env.sops
+If secrets/.env.sops already exists, add CMS_AUTH_GATEWAY_SECRET to it with
+  sops --input-type dotenv --output-type dotenv secrets/.env.sops
+instead of overwriting it. The next deploy renders both files on the server.
+EOF
+else
+  cat <<EOF
 Then commit the tracked changes (apps/cms-auth, .generated) and deploy. The
 .env files stay on the server (gitignored).
 EOF
+fi

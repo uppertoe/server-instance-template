@@ -3,7 +3,7 @@ services:
     # Pinned by digest (supply-chain control; CI's image-pins job enforces it;
     # the weekly digest-freshness workflow flags drift). The image is distroless
     # and already runs as the nonroot user (65532). See scaffold/docs/08-security-model.md.
-    image: ghcr.io/uppertoe/vps-scaffold-auth:latest@sha256:be7d9f5119d2207917918fbd9c382475692abfe3348d778696b19072d3eaa7e6
+    image: ghcr.io/uppertoe/vps-scaffold-auth:latest@sha256:0566817cc8cd3a3fb49e9e1c335464e46d4784bdb1a9b3a966ea4e78f4a155c6
     restart: unless-stopped
     # CIS Docker §5 runtime hardening. The auth binary needs no extra capabilities
     # and binds only an internal port behind Caddy.
@@ -17,13 +17,56 @@ services:
         required: false # keep `docker compose config` valid in CI without a real .env
     environment:
       - DOMAIN=${DOMAIN}
+      # Soft heap target below mem_limit (128m): Go collects harder as the
+      # heap nears it, rather than the container being OOM-killed, which would
+      # take forward_auth down for every gated site.
+      - GOMEMLIMIT=100MiB
+      # Sign-in hardening (these override apps/auth/.env). They need an image
+      # with the per-IP wrong-code limit, which the pinned digest has: on older
+      # images RATELIMIT_PER_IP also guarded code guesses, so 300/15m there
+      # would loosen guessing. Six-digit email codes: ten wrong guesses burn a
+      # code, and RATELIMIT_PER_EMAIL_CEILING in apps/auth/.env caps the codes
+      # one address can be sent, so guessing stays slow and noisy, since the
+      # person receives every code an attacker asks for. Code requests and
+      # sends per client IP are generous because an organisation may reach the
+      # server from one NAT address; wrong codes have their own per-IP limit,
+      # refunded on a correct code.
+      - OTP_LENGTH=6
+      - OTP_MAX_TOTAL_ATTEMPTS=10
+      - RATELIMIT_PER_IP=300/15m
+      - RATELIMIT_SENDS_PER_IP=120/1h
+      # The groups each route requires, rendered by the scaffold from the
+      # .caddy files: the admin Groups page lists them, offers to create any
+      # that are missing, and marks groups no route uses.
+      - ROUTE_GROUPS_FILE=/etc/vps-auth/route-groups.tsv
+      # Each site's access rules, rendered from the .caddy files the same way:
+      # the admin overview shows them as a "who can reach what" table.
+      - ROUTE_ACCESS_FILE=/etc/vps-auth/route-access.tsv
+      # Groups an application reads as one of its own roles can never be a
+      # break-glass card's target or a guest's membership. The renderer marks
+      # app-read groups in route-groups.tsv as well; list them here as the
+      # explicit record for this server once an app reads groups, for example:
+      # - BREAKGLASS_REFUSED_GROUPS=cms-editors myapp-admins
     volumes:
       - auth_data:/data
+      # Read-only, and only these generated files (no secrets in them).
+      - ../../.generated/caddy/route-groups.tsv:/etc/vps-auth/route-groups.tsv:ro
+      - ../../.generated/caddy/route-access.tsv:/etc/vps-auth/route-access.tsv:ro
     # Proxy-network wiring is generated (.generated/caddy/networks.yml): auth
     # joins only its own auth_proxy network, which Caddy also joins.
     read_only: true
+    # /tmp is memory charged to this container's 128 MiB limit, so it is
+    # capped: the service writes nothing large there (request bodies are
+    # capped well below this; SQLite uses it only for small temporary sorts).
     tmpfs:
-      - /tmp
+      - /tmp:size=16m
+    # cgroup_parent, not memswap_limit: Docker records memswap_limit and the
+    # systemd cgroup driver does not apply it, so the container swaps anyway.
+    # The slice (scaffold docker role) sets memory.swap.max=0 and cgroup v2
+    # enforces the smallest limit along the path. Safe here because measured
+    # usage is far under mem_limit; a container that cannot swap is OOM-killed
+    # rather than borrowing. Asserted by the compose audit (memory_tier).
+    cgroup_parent: vps-noswap.slice
     mem_limit: 128m
     pids_limit: 128
     healthcheck:
@@ -31,7 +74,10 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      # Generous on purpose: only startup failures inside this window are
+      # forgiven, and a full-stack recreate on a 2 GB box starves every app of
+      # CPU for minutes (2026-11-02 health-wait incident).
+      start_period: 120s
 
 volumes:
   auth_data:

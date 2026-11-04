@@ -14,9 +14,9 @@ include:
   # apps/ntfy/ntfy.caddy.disabled -> ntfy.caddy. See apps/ntfy/README.md.
   - apps/ntfy/docker-compose.yml
   # Authentication gateway (passwordless email one-time-code login).
-  # To enable: cp apps/auth/.env.example apps/auth/.env and edit it (set
-  # SESSION_SECRET, ALLOWED_EMAIL_DOMAINS, ADMIN_EMAILS, EMAIL_*), then
-  # uncomment the line below. See scaffold/docs/07-auth.md.
+  # To enable: write secrets/apps/auth/.env.sops from apps/auth/.env.example
+  # (set SESSION_SECRET, ALLOWED_EMAIL_DOMAINS, ADMIN_EMAILS, EMAIL_*; see
+  # secrets/README.md), then uncomment the line below. See scaffold/docs/07-auth.md.
   # - apps/auth/docker-compose.yml
   # Decap CMS commit broker -- editors sign in through the gateway (above) and commit
   # through a shared GitHub App, authored as themselves. One-time setup:
