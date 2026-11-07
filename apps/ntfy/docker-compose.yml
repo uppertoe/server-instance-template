@@ -4,7 +4,7 @@ services:
   # unable to create its user and cache databases on a first provision.
   # Same pattern as caddy-init.
   ntfy-init:
-    image: binwiederhier/ntfy:v2.37.1@sha256:a1dde1f3210b68ac0c29e53298c96a988d06c320d1201d72f3e8e224d1a546f3
+    image: binwiederhier/ntfy:v2.37.2@sha256:1875ddcf815c8a3c981d6d78c67a93452d0abba79b1ab9520b1f5f5238902bd7
     restart: "no"
     user: "0:0"
     cap_drop:
@@ -33,7 +33,7 @@ services:
     cgroup_parent: vps-noswap.slice
     # Pinned by digest (supply-chain control; CI's image-pins job enforces it;
     # the weekly digest-freshness workflow flags drift).
-    image: binwiederhier/ntfy:v2.37.1@sha256:a1dde1f3210b68ac0c29e53298c96a988d06c320d1201d72f3e8e224d1a546f3
+    image: binwiederhier/ntfy:v2.37.2@sha256:1875ddcf815c8a3c981d6d78c67a93452d0abba79b1ab9520b1f5f5238902bd7
     depends_on:
       ntfy-init:
         condition: service_completed_successfully
